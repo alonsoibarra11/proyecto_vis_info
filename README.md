@@ -6,6 +6,9 @@ barra brava sintetizado, cuya **intensidad crece con la capacidad y el
 tamaño** del estadio. A un costado hay un gráfico de barras con el ranking
 de estadios, conmutable entre **capacidad** y **superficie (m²)**.
 
+Observa la página en el siguiente link: https://alonsoibarra11.github.io/proyecto_vis_info/
+
+
 ## Tecnologías
 - **Plotly.js** — `scattergeo` para el mapa mundial y `bar` para el ranking.
 - **Tone.js** — síntesis en vivo del cántico (rugido de multitud + bombo + coro).
