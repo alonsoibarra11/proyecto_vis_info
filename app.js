@@ -2,8 +2,24 @@
    Estadios del mundo — mapa sonoro
    - Plotly scattergeo para el mapa
    - Plotly bar para el ranking (capacidad / área)
-   - Tone.js para sintetizar un cántico de barra brava
+   - Tone.js para sintetizar un "GOOOOL!" de celebración
+   - Bus de eventos para fisicalización (Arduino / servo)
    ============================================================ */
+
+// ============================================================
+//  BUS DE EVENTOS (desacople para el Arduino)
+//  Cualquier módulo (p.ej. arduino.js) puede escuchar estos
+//  eventos sin que app.js sepa nada del hardware.
+//    - "goal:start"  -> { stadium, intensity }  al empezar el GOOOL
+//    - "goal:level"  -> { level }  nivel de audio en vivo (0..1)
+//    - "goal:stop"   -> {}         al terminar / cortar el sonido
+// ============================================================
+const StadiumBus = new EventTarget();
+function emitBus(type, detail) {
+  StadiumBus.dispatchEvent(new CustomEvent(type, { detail }));
+}
+// Exponer globalmente para arduino.js (que se carga aparte).
+window.StadiumBus = StadiumBus;
 
 // ---------- Utilidades de escala ----------
 const capacities = STADIUMS.map(s => s.capacity);
@@ -57,111 +73,143 @@ function palette() {
 }
 
 // ============================================================
-//  SONIDO — Barra brava sintetizada con Tone.js
+//  SONIDO — "GOOOOL!" sintetizado con Tone.js (sin archivos)
+//  Un grito ascendente y sostenido (voz estilizada con vibrato)
+//  sobre un rugido de multitud que explota. Todo se genera en
+//  vivo, así podemos leer el nivel de audio en tiempo real con
+//  un Tone.Meter y usarlo para el temblor del servo (Arduino).
 // ============================================================
 let audioReady = false;
-let crowdNoise, crowdFilter, crowdGain;   // rugido de multitud (ruido filtrado)
-let kick, kickGain;                        // bombo de la hinchada
-let chantSynth, chantGain;                 // coro "oh oh oh"
-let reverb, masterGain;
-let currentLoop = null;
+let crowdNoise, crowdFilter, crowdGain;    // rugido de la multitud
+let voiceA, voiceB, voiceGain;             // "voces" del GOOOOL (osciladores)
+let vibrato, voiceFilter;                  // vibrato + formante del grito
+let reverb, masterGain, meter;             // salida + medidor de nivel
 let stopTimer = null;
+let levelRAF = null;                        // requestAnimationFrame del medidor
 
 async function initAudio() {
   if (audioReady) return;
   await Tone.start();
 
   masterGain = new Tone.Gain(0.9).toDestination();
-  reverb = new Tone.Reverb({ decay: 2.6, wet: 0.28 }).connect(masterGain);
 
-  // --- Rugido de multitud: ruido rosa a través de un filtro pasa-banda que se mueve ---
+  // Medidor de nivel en vivo (0..1 aprox tras normalizar dB).
+  meter = new Tone.Meter({ smoothing: 0.85 });
+  masterGain.connect(meter);
+
+  reverb = new Tone.Reverb({ decay: 3.2, wet: 0.3 }).connect(masterGain);
+
+  // --- Rugido de multitud: ruido rosa por un pasa-banda con "oleaje" ---
   crowdGain = new Tone.Gain(0).connect(reverb);
-  crowdFilter = new Tone.Filter({ type: "bandpass", frequency: 700, Q: 0.6 }).connect(crowdGain);
+  crowdFilter = new Tone.Filter({ type: "bandpass", frequency: 800, Q: 0.5 }).connect(crowdGain);
   crowdNoise = new Tone.Noise("pink").connect(crowdFilter);
   crowdNoise.start();
-  // LFO para dar "oleaje" al murmullo del público
-  const crowdLFO = new Tone.LFO({ frequency: 0.35, min: 450, max: 1100 }).start();
+  const crowdLFO = new Tone.LFO({ frequency: 0.4, min: 500, max: 1300 }).start();
   crowdLFO.connect(crowdFilter.frequency);
 
-  // --- Bombo de la barra ---
-  kickGain = new Tone.Gain(0).connect(reverb);
-  kick = new Tone.MembraneSynth({
-    pitchDecay: 0.04,
-    octaves: 6,
-    envelope: { attack: 0.001, decay: 0.32, sustain: 0.01, release: 0.4 }
-  }).connect(kickGain);
+  // --- "Voz" del GOOOOL: dos osciladores (grito) con vibrato y un ---
+  //     filtro que imita el formante de una vocal abierta ("ooo").
+  voiceFilter = new Tone.Filter({ type: "bandpass", frequency: 900, Q: 3 }).connect(reverb);
+  voiceGain = new Tone.Gain(0).connect(voiceFilter);
 
-  // --- Coro "oh oh oh" (cántico) ---
-  // filtro pasa-bajos para que las voces suenen más "corales" y menos ásperas
-  const chantFilter = new Tone.Filter(1200, "lowpass").connect(reverb);
-  chantGain = new Tone.Gain(0).connect(chantFilter);
-  chantSynth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: "sawtooth" },
-    envelope: { attack: 0.08, decay: 0.2, sustain: 0.6, release: 0.5 }
-  }).connect(chantGain);
+  voiceA = new Tone.Oscillator({ type: "sawtooth", frequency: 220 }).connect(voiceGain);
+  voiceB = new Tone.Oscillator({ type: "square",  frequency: 223 }).connect(voiceGain); // leve desafine = coro
+  voiceA.start();
+  voiceB.start();
+
+  // Vibrato del grito (le da la vibración humana al "GOOOOL").
+  // El LFO oscila directamente en cents (±100 ≈ ±1 semitono) y se
+  // conecta al detune de ambos osciladores.
+  vibrato = new Tone.LFO({ frequency: 5.5, min: -100, max: 100 }).start();
+  vibrato.connect(voiceA.detune);
+  vibrato.connect(voiceB.detune);
 
   audioReady = true;
 }
 
-// Notas del cántico (melodía tipo "dale dale dale... oh oh oh")
-const CHANT_NOTES = ["C3", "C3", "D3", "E3", "E3", "D3", "C3", "G2"];
+// Lee el medidor y publica el nivel (0..1) para el Arduino.
+function startLevelPump() {
+  stopLevelPump();
+  const tick = () => {
+    if (!audioReady) return;
+    const db = meter.getValue();           // dBFS (número, o -Infinity en silencio)
+    const val = typeof db === "number" ? db : -60;
+    // Normalizamos -60dB..0dB → 0..1
+    const level = Math.max(0, Math.min(1, (val + 60) / 60));
+    emitBus("goal:level", { level });
+    levelRAF = requestAnimationFrame(tick);
+  };
+  levelRAF = requestAnimationFrame(tick);
+}
+function stopLevelPump() {
+  if (levelRAF) { cancelAnimationFrame(levelRAF); levelRAF = null; }
+}
 
 function stopAllSound(fast = true) {
   if (!audioReady) return;
-  if (currentLoop) { currentLoop.stop(); currentLoop.dispose(); currentLoop = null; }
   if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
-  const t = fast ? 0.15 : 0.4;
+  const t = fast ? 0.15 : 0.5;
   crowdGain.gain.rampTo(0, t);
-  kickGain.gain.rampTo(0, t);
-  chantGain.gain.rampTo(0, t);
-  Tone.Transport.stop();
-  Tone.Transport.cancel();
+  voiceGain.gain.rampTo(0, t);
+  stopLevelPump();
+  emitBus("goal:stop", {});
 }
 
-async function playChant(stadium) {
+async function playGoal(stadium) {
   await initAudio();
   stopAllSound(true);
 
   const intensity = intensityOf(stadium); // 0..1
-  // La intensidad controla volúmenes y densidad rítmica.
-  const crowdVol = 0.12 + intensity * 0.45;   // murmullo base
-  const kickVol  = 0.25 + intensity * 0.75;   // fuerza del bombo
-  const chantVol = 0.15 + intensity * 0.55;   // fuerza del coro
 
-  // Tempo: los estadios más grandes suenan más "épicos" y con más pulso.
-  Tone.Transport.bpm.value = 96 + Math.round(intensity * 40); // 96..136
+  // Volúmenes proporcionales a la intensidad del estadio.
+  const crowdVol = 0.15 + intensity * 0.5;
+  const voiceVol = 0.18 + intensity * 0.55;
 
-  crowdGain.gain.rampTo(crowdVol, 0.4);
-  kickGain.gain.rampTo(kickVol, 0.2);
-  chantGain.gain.rampTo(chantVol, 0.3);
+  // La nota base del grito sube un poco con la intensidad (más épico).
+  const baseFreq = 180 + intensity * 90; // 180..270 Hz
 
-  let step = 0;
-  currentLoop = new Tone.Loop((time) => {
-    const idx = step % CHANT_NOTES.length;
+  const now = Tone.now();
 
-    // Bombo en cada pulso; doble golpe en estadios muy intensos.
-    kick.triggerAttackRelease("C1", "8n", time);
-    if (intensity > 0.6) {
-      kick.triggerAttackRelease("C1", "16n", time + Tone.Time("8n").toSeconds());
-    }
+  // 1) La multitud explota de golpe y luego se sostiene.
+  crowdGain.gain.cancelScheduledValues(now);
+  crowdGain.gain.setValueAtTime(0.0001, now);
+  crowdGain.gain.exponentialRampToValueAtTime(crowdVol, now + 0.15);
 
-    // Coro: acorde en cada nota del cántico.
-    const root = CHANT_NOTES[idx];
-    const chord = [root];
-    if (intensity > 0.4) chord.push(Tone.Frequency(root).transpose(7).toNote()); // quinta
-    if (intensity > 0.75) chord.push(Tone.Frequency(root).transpose(12).toNote()); // octava
-    chantSynth.triggerAttackRelease(chord, "4n", time + 0.02);
+  // 2) El "GOOOOL": barrido de frecuencia ascendente (portamento) +
+  //    apertura del formante (el filtro sube) = sensación de grito.
+  voiceA.frequency.cancelScheduledValues(now);
+  voiceB.frequency.cancelScheduledValues(now);
+  voiceA.frequency.setValueAtTime(baseFreq * 0.75, now);
+  voiceB.frequency.setValueAtTime(baseFreq * 0.75 + 3, now);
+  // Sube rápido (la "G-O") y se sostiene en la "OOOO".
+  voiceA.frequency.exponentialRampToValueAtTime(baseFreq, now + 0.35);
+  voiceB.frequency.exponentialRampToValueAtTime(baseFreq + 3, now + 0.35);
 
-    step++;
-  }, "4n").start(0);
+  voiceFilter.frequency.cancelScheduledValues(now);
+  voiceFilter.frequency.setValueAtTime(500, now);
+  voiceFilter.frequency.exponentialRampToValueAtTime(1400, now + 0.4);
+  voiceFilter.frequency.exponentialRampToValueAtTime(700, now + 3.2);
 
-  Tone.Transport.start();
+  // Envolvente del grito: ataque marcado, sostiene y decae.
+  voiceGain.gain.cancelScheduledValues(now);
+  voiceGain.gain.setValueAtTime(0.0001, now);
+  voiceGain.gain.exponentialRampToValueAtTime(voiceVol, now + 0.12);
+  voiceGain.gain.setValueAtTime(voiceVol, now + 2.4);
+  voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 4.0);
 
-  // El cántico dura un rato y se apaga solo (loop de ~ 6 s + fade).
-  stopTimer = setTimeout(() => stopAllSound(false), 6000);
+  // Duración total del festejo escala levemente con la intensidad.
+  const durationMs = 3500 + Math.round(intensity * 1500); // 3.5s..5s
+
+  // Nivel de audio en vivo → bus → Arduino.
+  startLevelPump();
+
+  // Aviso a quien fisicalice (Arduino/servo): empieza el gol.
+  emitBus("goal:start", { stadium, intensity, durationMs });
+
+  stopTimer = setTimeout(() => stopAllSound(false), durationMs);
 
   document.getElementById("now-playing").textContent =
-    `🔊 Sonando: ${stadium.name} — ${stadium.city}, ${stadium.country} · ` +
+    `⚽ ¡GOOOOL! en ${stadium.name} — ${stadium.city}, ${stadium.country} · ` +
     `Aforo ${stadium.capacity.toLocaleString("es")} · Intensidad ${(intensity * 100).toFixed(0)}%`;
 }
 
@@ -220,7 +268,7 @@ function drawMap() {
       if (!mapInitialized) {
         gd.on("plotly_click", ev => {
           const pt = ev.points[0];
-          if (pt) playChant(STADIUMS[pt.pointIndex]);
+          if (pt) playGoal(STADIUMS[pt.pointIndex]);
         });
         mapInitialized = true;
       }
@@ -284,7 +332,7 @@ function drawBar(metric) {
       gd.removeAllListeners && gd.removeAllListeners("plotly_click");
       gd.on("plotly_click", ev => {
         const pt = ev.points[0];
-        if (pt && pt.customdata) playChant(pt.customdata);
+        if (pt && pt.customdata) playGoal(pt.customdata);
       });
     });
 }

@@ -16,7 +16,11 @@
       <h1>⚽ Estadios más importantes del mundo</h1>
       <p>Haz click en un estadio del mapa para escuchar a su barra brava. La intensidad del cántico crece con la capacidad y el tamaño del estadio.</p>
     </div>
-    <button id="btn-theme" class="theme-btn" title="Cambiar modo claro/oscuro">🌙 Modo oscuro</button>
+    <div class="header-actions">
+      <!-- Botón para conectar el Arduino (servo). Oculto por ahora; ver README, sección "Integración con Arduino" para reactivarlo. -->
+      <!-- <button id="btn-arduino" class="theme-btn" title="Conectar la maqueta (servo por USB)">🔌 Conectar Arduino</button> -->
+      <button id="btn-theme" class="theme-btn" title="Cambiar modo claro/oscuro">🌙 Modo oscuro</button>
+    </div>
   </header>
 
   <!-- Componente único: el mapa ocupa todo y el ranking va fijo a la izquierda -->
@@ -37,9 +41,13 @@
 
     <!-- Estado del sonido, superpuesto abajo -->
     <div id="now-playing">🔇 Ningún estadio sonando. Haz click en un punto del mapa.</div>
+
+    <!-- Estado de la conexión con el Arduino / servo. Oculto por ahora; ver README para reactivarlo junto con el botón. -->
+    <!-- <div id="arduino-status">🔌 Arduino sin conectar.</div> -->
   </div>
 
   <script src="data.js"></script>
   <script src="app.js"></script>
+  <script src="arduino.js"></script>
 </body>
 </html>

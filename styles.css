@@ -66,6 +66,12 @@ header p {
   font-size: 13px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .theme-btn {
   background: transparent;
   color: var(--text);
@@ -181,7 +187,27 @@ button.toggle.active {
   z-index: 5;
 }
 
+/* ===== Estado del Arduino (overlay inferior izquierdo) ===== */
+#arduino-status {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: 46%;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--muted);
+  z-index: 5;
+}
+#arduino-status.error { color: #e53e3e; }
+
 @media (max-width: 760px) {
   .side-panel { width: 100%; max-width: none; }
-  #now-playing { max-width: calc(100% - 32px); left: 16px; right: auto; }
+  #now-playing { max-width: calc(100% - 32px); left: 16px; right: auto; bottom: 58px; }
+  #arduino-status { max-width: calc(100% - 32px); bottom: 16px; }
 }
