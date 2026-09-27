@@ -1,0 +1,14 @@
+# Variables de entorno (no subir secretos)
+.env
+.env.local
+.env.*.local
+
+# Dependencias
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema
+.DS_Store
