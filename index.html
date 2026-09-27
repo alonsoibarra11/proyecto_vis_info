@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estadios del Mundo · Mapa sonoro</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+  <!-- Tone.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+</head>
+<body>
+  <header>
+    <div class="header-text">
+      <h1>⚽ Estadios más importantes del mundo</h1>
+      <p>Haz click en un estadio del mapa para escuchar a su barra brava. La intensidad del cántico crece con la capacidad y el tamaño del estadio.</p>
+    </div>
+    <button id="btn-theme" class="theme-btn" title="Cambiar modo claro/oscuro">🌙 Modo oscuro</button>
+  </header>
+
+  <!-- Componente único: el mapa ocupa todo y el ranking va fijo a la izquierda -->
+  <div class="stage">
+    <div id="map"></div>
+
+    <!-- Panel del ranking a la izquierda, altura completa, fondo transparente -->
+    <div class="side-panel" id="ranking-panel">
+      <div class="panel-head">
+        <h2>Ranking de estadios</h2>
+      </div>
+      <div class="controls">
+        <button class="toggle active" id="btn-cap" data-metric="capacity">Por capacidad</button>
+        <button class="toggle" id="btn-area" data-metric="areaM2">Por tamaño (m²)</button>
+      </div>
+      <div id="bar"></div>
+    </div>
+
+    <!-- Estado del sonido, superpuesto abajo -->
+    <div id="now-playing">🔇 Ningún estadio sonando. Haz click en un punto del mapa.</div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

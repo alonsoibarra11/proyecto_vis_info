@@ -1,0 +1,187 @@
+/* ===== Tema claro (por defecto) ===== */
+:root,
+html[data-theme="light"] {
+  --bg: #f4f6fa;
+  --panel: rgba(255, 255, 255, 0.86);
+  --panel-solid: #ffffff;
+  --border: #d5dae2;
+  --accent: #d98200;
+  --accent-2: #2563eb;
+  --text: #1a2230;
+  --muted: #5b6472;
+  --shadow: 0 8px 28px rgba(20, 30, 50, 0.18);
+  --panel-fade-strong: rgba(244, 246, 250, 0.92);
+  --panel-fade-soft: rgba(244, 246, 250, 0.55);
+}
+
+/* ===== Tema oscuro ===== */
+html[data-theme="dark"] {
+  --bg: #0d1117;
+  --panel: rgba(22, 27, 34, 0.82);
+  --panel-solid: #161b22;
+  --border: #30363d;
+  --accent: #f2a900;
+  --accent-2: #58a6ff;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --panel-fade-strong: rgba(13, 17, 23, 0.92);
+  --panel-fade-soft: rgba(13, 17, 23, 0.55);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+header {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-solid);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-text { flex: 1; }
+
+header h1 {
+  margin: 0;
+  font-size: 21px;
+  letter-spacing: 0.3px;
+}
+
+header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.theme-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.theme-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
+
+/* ===== Escenario: mapa a pantalla completa con overlays ===== */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ===== Panel de ranking a la izquierda, altura completa, transparente ===== */
+.side-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 46%;
+  max-width: 620px;
+  min-width: 360px;
+  /* degradado semitransparente: legible a la izquierda, se funde con el mapa a la derecha */
+  background: linear-gradient(90deg,
+      var(--panel-fade-strong) 0%,
+      var(--panel-fade-soft) 62%,
+      transparent 100%);
+  padding: 14px 10px 44px 20px;
+  display: flex;
+  flex-direction: column;
+  z-index: 5;
+  pointer-events: none;         /* deja pasar el arrastre del mapa por los huecos */
+}
+
+/* los controles y el gráfico sí reciben clicks */
+.side-panel .panel-head,
+.side-panel .controls,
+.side-panel #bar { pointer-events: auto; }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.side-panel h2 {
+  margin: 0 0 2px;
+  font-size: 16px;
+  color: var(--accent);
+  text-shadow: 0 1px 2px var(--bg);
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+button.toggle {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 13px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+button.toggle:hover { border-color: var(--accent-2); }
+button.toggle.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+#bar {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ===== Estado del sonido (overlay inferior) ===== */
+#now-playing {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  max-width: 46%;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--accent-2);
+  z-index: 5;
+}
+
+@media (max-width: 760px) {
+  .side-panel { width: 100%; max-width: none; }
+  #now-playing { max-width: calc(100% - 32px); left: 16px; right: auto; }
+}
