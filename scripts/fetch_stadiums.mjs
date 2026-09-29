@@ -34,13 +34,23 @@ const USER_AGENT = "proyecto_vis_info/1.0 (dataset generator; educational use)";
 // ---------- Query SPARQL ----------
 // P31/P279* Q483110 = instancia (o subclase) de "estadio".
 // P1083 capacidad · P625 coordenadas · P17 país · P131 ubicación admin ·
-// P571 fecha de inauguración. Pedimos hasta 4x el límite para poder
-// filtrar/deduplicar y quedarnos con los mejores.
+// P571 fecha de inauguración.
+//
+// IMPORTANTE — evitar datos erróneos:
+// Wikidata contiene muchos estadios DEMOLIDOS/CERRADOS con su capacidad
+// histórica (p. ej. el viejo Estádio da Luz con 120.000, demolido en 2003).
+// Para quedarnos con estadios EN USO:
+//   - Excluimos los que tienen fecha de disolución/demolición (P576).
+//   - Excluimos los marcados como "estructura desaparecida" (Q19860854)
+//     o "ex edificio/estructura" vía P31.
+// `wdt:P1083` ya devuelve el valor de mayor rango (preferente) de capacidad.
 const QUERY = `
 SELECT ?s ?sLabel ?cap ?coord ?countryLabel ?cityLabel ?inception WHERE {
   ?s wdt:P31/wdt:P279* wd:Q483110 ;
      wdt:P1083 ?cap ;
      wdt:P625 ?coord .
+  FILTER NOT EXISTS { ?s wdt:P576 ?dissolved. }        # sin fecha de demolición
+  FILTER NOT EXISTS { ?s wdt:P31 wd:Q19860854. }       # no "estructura desaparecida"
   OPTIONAL { ?s wdt:P17 ?country. }
   OPTIONAL { ?s wdt:P131 ?city. }
   OPTIONAL { ?s wdt:P571 ?inception. }
@@ -51,8 +61,9 @@ LIMIT ${Math.round(LIMIT * 2.5)}
 `;
 
 // ---------- Mapa país -> confederación (para el filtro de la app) ----------
-// Cobertura de los países de fútbol más frecuentes. Los no listados
-// caen en "Otros".
+// Cobertura de los países presentes en el dataset. Si al regenerar con otros
+// parámetros aparecen países nuevos, el resumen final los mostrará bajo
+// "Otros" y bastará con añadirlos aquí.
 const CONFEDERATION = {
   // UEFA (Europa)
   "España": "UEFA", "Inglaterra": "UEFA", "Reino Unido": "UEFA", "Alemania": "UEFA",
@@ -71,12 +82,14 @@ const CONFEDERATION = {
   "México": "CONCACAF", "Estados Unidos": "CONCACAF", "EE.UU.": "CONCACAF",
   "Canadá": "CONCACAF", "Costa Rica": "CONCACAF", "Honduras": "CONCACAF",
   "Guatemala": "CONCACAF", "Jamaica": "CONCACAF", "Cuba": "CONCACAF",
+  "El Salvador": "CONCACAF",
   // CAF (África)
   "Sudáfrica": "CAF", "Egipto": "CAF", "Marruecos": "CAF", "Argelia": "CAF",
   "Túnez": "CAF", "Nigeria": "CAF", "Ghana": "CAF", "Camerún": "CAF", "Senegal": "CAF",
   "República Democrática del Congo": "CAF", "Zambia": "CAF", "Libia": "CAF",
   "Zimbabue": "CAF", "Etiopía": "CAF", "Tanzania": "CAF", "Costa de Marfil": "CAF",
   "Kenia": "CAF", "Somalia": "CAF", "Guinea": "CAF", "Mali": "CAF", "Angola": "CAF",
+  "Uganda": "CAF", "Sierra Leona": "CAF", "Mozambique": "CAF", "Gabón": "CAF",
   // AFC (Asia)
   "China": "AFC", "República Popular China": "AFC", "República de China": "AFC",
   "Japón": "AFC", "Corea del Sur": "AFC", "Corea del Norte": "AFC",

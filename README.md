@@ -74,16 +74,25 @@ node scripts/fetch_stadiums.mjs
 ```
 
 El script consulta el endpoint SPARQL de Wikidata (WDQS), pide estadios con
-capacidad y coordenadas, **filtra valores absurdos** (por defecto capacidad
-entre 15.000 y 130.000), deduplica, ordena por capacidad y escribe los `--limit`
-más grandes. La confederación se deriva del país mediante una tabla en el propio
-script.
+capacidad y coordenadas, y aplica varios filtros para reducir datos erróneos:
 
-> Notas sobre los datos abiertos: al ser una fuente colaborativa, algunos
-> registros pueden ser estadios históricos/demolidos, recintos de otros deportes
-> (p. ej. fútbol americano en EE.UU.) o traer la ciudad como distrito
-> administrativo. El filtro de capacidad reduce el ruido pero no lo elimina del
-> todo; ajusta `--min`/`--max` o la tabla de confederaciones si lo necesitas.
+- **Excluye estadios demolidos o cerrados** (los que tienen fecha de disolución
+  `P576`, o están marcados como estructura desaparecida). Esto evita que
+  aparezcan con su capacidad histórica (p. ej. el viejo Estádio da Luz con
+  120.000, demolido en 2003).
+- **Filtra por rango de capacidad** (`--min`/`--max`) para descartar valores
+  absurdos (p. ej. registros con 400.000 o 1.500.000).
+- Usa el valor de capacidad de mayor rango (preferente) de cada estadio,
+  deduplica, ordena por capacidad y escribe los `--limit` más grandes.
+
+La confederación se deriva del país mediante una tabla en el propio script.
+
+> Notas sobre los datos abiertos: al ser una fuente colaborativa, todavía puede
+> quedar algún caso con capacidad histórica inflada si la entidad no está
+> marcada como demolida en Wikidata (p. ej. el Estadio Morumbi figura con su
+> aforo histórico). También hay recintos de otros deportes (fútbol americano en
+> EE.UU.) o ciudades expresadas como distrito administrativo. Ajusta
+> `--min`/`--max` o la tabla de confederaciones si lo necesitas.
 
 ## Variables de entorno
 La configuración se define en un archivo `.env` en la raíz del proyecto. Se

@@ -672,6 +672,41 @@ themeBtn.addEventListener("click", () => {
 const resetViewBtn = document.getElementById("btn-reset-view");
 if (resetViewBtn) resetViewBtn.addEventListener("click", resetMapView);
 
+// ---------- Portada: "Explorar estadios" hace scroll hasta el mapa ----------
+function resizeMapSoon() {
+  const gd = document.getElementById("map");
+  if (gd && window.Plotly) {
+    Plotly.Plots.resize(gd);
+    schedulePositionImages();
+  }
+}
+function goToMap() {
+  const target = document.getElementById("app-top");
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+const exploreBtn = document.getElementById("btn-explore");
+if (exploreBtn) exploreBtn.addEventListener("click", goToMap);
+const heroScroll = document.getElementById("hero-scroll");
+if (heroScroll) heroScroll.addEventListener("click", goToMap);
+
+// El mapa se dibuja estando fuera de vista (bajo la portada). La primera vez
+// que entra en pantalla, forzamos un resize para que Plotly ajuste su tamaño.
+// Funciona tanto con el botón como con scroll manual.
+(function watchMapVisibility() {
+  const gd = document.getElementById("map");
+  if (!gd || !("IntersectionObserver" in window)) {
+    // Fallback: un resize diferido tras cargar.
+    window.addEventListener("load", () => setTimeout(resizeMapSoon, 300));
+    return;
+  }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { resizeMapSoon(); }
+    }
+  }, { threshold: 0.15 });
+  io.observe(gd);
+})();
+
 // ---------- Init ----------
 applyThemeLabel();
 buildFilter();

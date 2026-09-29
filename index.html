@@ -11,6 +11,42 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 </head>
 <body>
+  <!-- ===== Portada de bienvenida (scroll hacia el mapa) ===== -->
+  <section class="hero" id="hero">
+    <!-- Fondo: líneas de cancha de fútbol dibujadas con SVG -->
+    <svg class="hero-pitch" viewBox="0 0 1200 675" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <!-- línea de mediocampo -->
+      <line x1="600" y1="40" x2="600" y2="635" />
+      <!-- círculo central -->
+      <circle cx="600" cy="337" r="90" />
+      <circle cx="600" cy="337" r="6" class="filled" />
+      <!-- borde del campo -->
+      <rect x="40" y="40" width="1120" height="595" rx="6" />
+      <!-- área izquierda -->
+      <rect x="40" y="187" width="150" height="300" />
+      <rect x="40" y="262" width="60" height="150" />
+      <!-- área derecha -->
+      <rect x="1010" y="187" width="150" height="300" />
+      <rect x="1100" y="262" width="60" height="150" />
+    </svg>
+
+    <div class="hero-content">
+      <p class="hero-kicker">⚽ Visualización de estadios</p>
+      <h1 class="hero-title">Los templos del<br><span>fútbol mundial</span></h1>
+      <p class="hero-sub">
+        ~400 de los estadios más grandes del planeta en un mapa sonoro.
+        Haz click en cualquiera para escuchar a su hinchada: mientras más
+        grande el estadio, más fuerte el rugido.
+      </p>
+      <button id="btn-explore" class="hero-btn" type="button">Explorar estadios ↓</button>
+    </div>
+
+    <button class="hero-scroll" id="hero-scroll" type="button" aria-label="Bajar al mapa">
+      <span></span>
+    </button>
+  </section>
+
+  <div class="app" id="app-top">
   <header>
     <div class="header-text">
       <h1>⚽ Estadios más importantes del mundo</h1>
@@ -63,6 +99,7 @@
     <!-- Estado de la conexión con el Arduino / servo. Oculto por ahora; ver README para reactivarlo junto con el botón. -->
     <!-- <div id="arduino-status">🔌 Arduino sin conectar.</div> -->
   </div>
+  </div><!-- /.app -->
 
   <script src="data.js"></script>
   <script src="app.js"></script>

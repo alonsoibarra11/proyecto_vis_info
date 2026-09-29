@@ -31,16 +31,140 @@ html[data-theme="dark"] {
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; }
-
+html { height: 100%; scroll-behavior: smooth; }
 body {
   margin: 0;
+  min-height: 100%;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   display: flex;
   flex-direction: column;
   transition: background 0.25s ease, color 0.25s ease;
+}
+
+/* ============================================================
+   PORTADA DE BIENVENIDA (hero) — estética de cancha de fútbol
+   ============================================================ */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 8vw;
+  overflow: hidden;
+  color: #f2f5f8;
+  /* césped nocturno: verdes profundos con un foco de luz de estadio */
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255,255,255,0.14), transparent 45%),
+    linear-gradient(160deg, #0f3d24 0%, #0a2e1b 55%, #06321d 100%);
+}
+
+/* Líneas de cancha en SVG, como marca de agua del fondo */
+.hero-pitch {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.28;
+  pointer-events: none;
+}
+.hero-pitch line,
+.hero-pitch circle,
+.hero-pitch rect {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 3;
+}
+.hero-pitch .filled { fill: rgba(255, 255, 255, 0.7); stroke: none; }
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 780px;
+}
+
+.hero-kicker {
+  margin: 0 0 14px;
+  font-size: 15px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #7ee8a6;
+  font-weight: 600;
+}
+
+.hero-title {
+  margin: 0;
+  font-size: clamp(40px, 8vw, 92px);
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -1px;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+.hero-title span { color: #f2a900; }  /* acento tipo balón/estadio */
+
+.hero-sub {
+  margin: 22px 0 34px;
+  max-width: 620px;
+  font-size: clamp(15px, 2.2vw, 19px);
+  line-height: 1.55;
+  color: rgba(240, 245, 248, 0.82);
+}
+
+.hero-btn {
+  background: #f2a900;
+  color: #10261a;
+  border: none;
+  border-radius: 40px;
+  padding: 15px 32px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.hero-btn:hover {
+  background: #ffbf1a;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+}
+.hero-btn:active { transform: translateY(0); }
+
+/* Indicador de scroll animado abajo */
+.hero-scroll {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 42px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  z-index: 2;
+}
+.hero-scroll span {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 4px;
+  height: 8px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  animation: heroScrollDot 1.5s infinite;
+}
+@keyframes heroScrollDot {
+  0%   { opacity: 0; transform: translateY(0); }
+  40%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(16px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .hero-scroll span { animation: none; }
 }
 
 header {
@@ -86,10 +210,18 @@ header p {
 .theme-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
 
 /* ===== Escenario: mapa a pantalla completa con overlays ===== */
+/* El bloque de la app (cabecera + mapa) ocupa una pantalla completa, de modo
+   que quede justo debajo de la portada al hacer scroll. */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 .stage {
   position: relative;
   flex: 1;
-  min-height: 0;
+  min-height: 420px;
 }
 
 #map {
