@@ -175,8 +175,16 @@ async function playGoal(stadium) {
 
   const intensity = intensityOf(stadium); // 0..1
 
-  // Volumen proporcional a la intensidad: 0.30 (chico) .. 1.0 (enorme).
-  const vol = 0.30 + intensity * 0.70;
+  // --- Volumen mucho más contrastado según capacidad ---
+  // El oído percibe el volumen en DECIBELES, no en ganancia lineal, así que
+  // mapeamos la intensidad a un rango amplio de dB: estadio chico ≈ -20 dB
+  // (claramente más bajo) y estadio enorme = 0 dB (a tope). Una gamma 0.8
+  // reparte bien el contraste entre la mayoría de estadios, que se concentran
+  // en el tramo bajo-medio de capacidad.
+  const contrast = Math.pow(intensity, 0.8); // 0..1
+  const MIN_DB = -20, MAX_DB = 0;
+  const db = MIN_DB + contrast * (MAX_DB - MIN_DB);
+  const vol = Tone.dbToGain(db); // dB -> ganancia lineal para el Gain node
 
   const now = Tone.now();
 
@@ -213,15 +221,23 @@ async function playGoal(stadium) {
 // ============================================================
 let mapInitialized = false;
 
+// Con más estadios visibles que este umbral, mostramos marcadores nativos
+// (que Plotly reposiciona solo, sin coste por frame). Con pocos, mostramos
+// además las fotos de estadio. Así la página nunca se congela.
+const PHOTO_THRESHOLD = 40;
+
 function drawMap() {
   const p = palette();
   const list = visibleStadiums();                 // subconjunto activo (filtro)
   mapList = list;                                  // fuente única para el overlay
-  const sizes = list.map(s => 10 + intensityOf(s) * 26); // tamaño del punto
+  const sizes = list.map(s => 8 + intensityOf(s) * 20);  // tamaño del punto
+  const colors = list.map(s => intensityOf(s));
 
-  // El scattergeo sigue existiendo como CAPA DE CLICK/HOVER: marcadores
-  // casi transparentes que capturan el click y muestran el tooltip. Encima
-  // dibujamos la foto del estadio como overlay HTML (ver positionStadiumImages).
+  const showPhotos = list.length > 0 && list.length <= PHOTO_THRESHOLD;
+
+  // Marcadores NATIVOS de Plotly: los dibuja y reposiciona el propio Plotly
+  // (fluido incluso con cientos de puntos). Cuando mostramos fotos encima,
+  // atenuamos el círculo para que la foto sea la protagonista.
   const trace = {
     type: "scattergeo",
     mode: "markers",
@@ -234,9 +250,11 @@ function drawMap() {
     hoverinfo: "text",
     marker: {
       size: sizes,
-      color: "rgba(0,0,0,0)",           // invisible: la foto va encima
-      line: { color: "rgba(0,0,0,0)", width: 0 },
-      opacity: 0.01                      // casi 0 pero clickeable
+      color: colors,
+      colorscale: [[0, "#2b6cb0"], [0.5, "#f2a900"], [1, "#e53e3e"]],
+      cmin: 0, cmax: 1,
+      opacity: showPhotos ? 0.15 : 0.9,
+      line: { color: p.markerLine, width: showPhotos ? 0 : 0.5 }
     }
   };
 
@@ -256,20 +274,24 @@ function drawMap() {
 
   Plotly.react("map", [trace], layout, { responsive: true, displayModeBar: false })
     .then(gd => {
-      buildStadiumImages(list);      // (re)crea los <img> del subconjunto activo
-      positionStadiumImages(gd);     // los coloca según la posición actual
-      // Los <path> del scattergeo pueden aparecer un tick después del primer
-      // render; reposicionamos en el siguiente frame para asegurar alineación.
-      requestAnimationFrame(() => positionStadiumImages(gd));
+      mapGd = gd;
+      if (showPhotos) {
+        buildStadiumImages(list);              // (re)crea los <img> del subconjunto
+        schedulePositionImages();              // los coloca (throttle con rAF)
+        requestAnimationFrame(schedulePositionImages);
+      } else {
+        clearStadiumImages();                  // muchos: sin fotos, todo nativo
+      }
       if (!mapInitialized) {
         gd.on("plotly_click", ev => {
           const pt = ev.points[0];
           if (pt && mapList[pt.pointIndex]) playGoal(mapList[pt.pointIndex]);
         });
-        // Reposicionar las fotos en cada render (zoom, pan, resize).
-        gd.on("plotly_afterplot", () => positionStadiumImages(gd));
-        gd.on("plotly_relayout", () => positionStadiumImages(gd));
-        window.addEventListener("resize", () => positionStadiumImages(gd));
+        // Reposicionar las fotos en cada render, pero SOLO si hay fotos y
+        // como mucho una vez por frame (rAF), para no congelar el zoom/pan.
+        gd.on("plotly_afterplot", schedulePositionImages);
+        gd.on("plotly_relayout", schedulePositionImages);
+        window.addEventListener("resize", schedulePositionImages);
         mapInitialized = true;
       }
     });
@@ -287,8 +309,18 @@ const STADIUM_IMG = "assets/estadio.png";
 let stadiumImgEls = [];
 let mapList = STADIUMS;   // lista de estadios actualmente dibujada en el mapa
 
+let mapGd = null;          // referencia al gráfico de Plotly
+let positionRAF = null;    // rAF pendiente para reposicionar fotos (throttle)
+
 function imgContainer() {
   return document.getElementById("stadium-images");
+}
+
+function clearStadiumImages() {
+  const cont = imgContainer();
+  if (cont) cont.innerHTML = "";
+  stadiumImgEls = [];
+  if (positionRAF) { cancelAnimationFrame(positionRAF); positionRAF = null; }
 }
 
 // (Re)crea los <img> para la lista dada (el subconjunto visible del filtro).
@@ -302,10 +334,26 @@ function buildStadiumImages(list) {
     el.className = "stadium-pin";
     el.alt = s.name;
     el.title = `${s.name} — ${s.city}, ${s.country}`;
+    el.loading = "lazy";
+    // Tamaño fijo por estadio (no cambia en zoom/pan): evita recalcular estilo.
+    const size = 26 + intensityOf(s) * 40;
+    el.style.width = size + "px";
+    el.style.height = size + "px";
+    el.style.zIndex = String(3 + Math.round(intensityOf(s) * 10));
     // Click en la foto = mismo efecto que click en el punto.
     el.addEventListener("click", () => playGoal(s));
     cont.appendChild(el);
     return el;
+  });
+}
+
+// Reposiciona como mucho una vez por frame (rAF). Barato y sin congelar.
+function schedulePositionImages() {
+  if (!stadiumImgEls.length) return;   // no hay fotos: nada que hacer
+  if (positionRAF) return;             // ya hay uno agendado
+  positionRAF = requestAnimationFrame(() => {
+    positionRAF = null;
+    if (mapGd) positionStadiumImages(mapGd);
   });
 }
 
@@ -381,7 +429,7 @@ function readPlottedPointPositions(gd, cont) {
 
 function positionStadiumImages(gd) {
   const cont = imgContainer();
-  if (!cont || !gd || !gd._fullLayout || !gd._fullLayout.geo) return;
+  if (!cont || !stadiumImgEls.length || !gd || !gd._fullLayout || !gd._fullLayout.geo) return;
 
   // 1) Vía preferida: leer la posición real de los puntos ya dibujados.
   let positions = readPlottedPointPositions(gd, cont);
@@ -400,15 +448,10 @@ function positionStadiumImages(gd) {
     const px = positions ? positions[i] : project(s.lon, s.lat);
     if (!px || !isFinite(px.x) || !isFinite(px.y)) { el.style.display = "none"; return; }
 
-    // Tamaño: 26px..66px según intensidad.
-    const size = 26 + intensityOf(s) * 40;
+    // Posicionamos con transform (capa de composición, sin reflow) y
+    // centramos con -50%. width/height/zIndex ya se fijaron en buildStadiumImages.
     el.style.display = "block";
-    el.style.width = size + "px";
-    el.style.height = size + "px";
-    el.style.left = px.x + "px";
-    el.style.top = px.y + "px";
-    // z-index: los estadios más intensos, al frente.
-    el.style.zIndex = String(3 + Math.round(intensityOf(s) * 10));
+    el.style.transform = `translate(${px.x}px, ${px.y}px) translate(-50%, -50%)`;
   });
 }
 
@@ -466,34 +509,148 @@ function drawBar() {
       gd.removeAllListeners && gd.removeAllListeners("plotly_click");
       gd.on("plotly_click", ev => {
         const pt = ev.points[0];
-        if (pt && pt.customdata) playGoal(pt.customdata);
+        if (pt && pt.customdata) {
+          zoomToStadium(pt.customdata);   // acerca el mapa a ese estadio
+          playGoal(pt.customdata);        // y reproduce su sonido
+        }
       });
     });
 }
 
-// ---------- Filtro por confederación ----------
-function buildFilter() {
-  const sel = document.getElementById("filter-confederation");
-  if (!sel) return;
-  // Cuenta de estadios por confederación, para mostrar (n) en cada opción.
-  const counts = {};
-  for (const s of STADIUMS) counts[s.confederation] = (counts[s.confederation] || 0) + 1;
+// Centra y acerca el mapa geo al estadio indicado (animado).
+const GEO_ZOOM_SCALE = 6;   // nivel de acercamiento (1 = mundo completo)
+function zoomToStadium(stadium) {
+  if (!mapGd || !stadium) return;
+  // En projection "natural earth", rotation.lon/lat centra el mapa y
+  // projection.scale hace el zoom. center.lon/lat cubre el caso scoped.
+  const relayout = {
+    "geo.projection.rotation.lon": stadium.lon,
+    "geo.projection.rotation.lat": stadium.lat,
+    "geo.projection.scale": GEO_ZOOM_SCALE,
+    "geo.center.lon": stadium.lon,
+    "geo.center.lat": stadium.lat
+  };
+  // Intentamos animarlo; si la versión no anima layout.geo, caemos a relayout.
+  const done = () => schedulePositionImages();
+  try {
+    Plotly.animate(mapGd, { layout: relayout }, {
+      transition: { duration: 700, easing: "cubic-in-out" },
+      frame: { duration: 700, redraw: true }
+    }).then(done, () => Plotly.relayout(mapGd, relayout).then(done));
+  } catch (_) {
+    Plotly.relayout(mapGd, relayout).then(done);
+  }
+}
 
-  sel.innerHTML = "";
-  CONFEDERATIONS.forEach(conf => {
-    const n = conf === "Todas" ? STADIUMS.length : (counts[conf] || 0);
-    if (conf !== "Todas" && n === 0) return; // no ofrecer confederaciones vacías
-    const opt = document.createElement("option");
-    opt.value = conf;
-    opt.textContent = `${conf} (${n})`;
-    sel.appendChild(opt);
-  });
-  sel.value = activeConfederation;
-  sel.addEventListener("change", () => {
-    activeConfederation = sel.value;
-    drawMap();
-    drawBar();
-  });
+// Botón para volver a la vista mundial (des-zoom).
+function resetMapView() {
+  if (!mapGd) return;
+  Plotly.relayout(mapGd, {
+    "geo.projection.rotation.lon": 0,
+    "geo.projection.rotation.lat": 0,
+    "geo.projection.scale": 1,
+    "geo.center.lon": 0,
+    "geo.center.lat": 0
+  }).then(() => schedulePositionImages());
+}
+
+// ---------- Panel de filtros (confederación + país + capacidad mínima) ----------
+// Redibuja mapa y ranking, y refresca el texto de resultados.
+function applyFilters() {
+  drawMap();
+  drawBar();
+  updateFilterSummary();
+}
+
+function updateFilterSummary() {
+  const el = document.getElementById("filter-summary");
+  if (!el) return;
+  const n = visibleStadiums().length;
+  el.textContent = `${n} de ${STADIUMS.length} estadios`;
+}
+
+function buildFilter() {
+  const confSel = document.getElementById("filter-confederation");
+  const countrySel = document.getElementById("filter-country");
+  const capRange = document.getElementById("filter-capacity");
+  const capOut = document.getElementById("filter-capacity-value");
+
+  // --- Confederación (con conteo por opción) ---
+  if (confSel) {
+    const counts = {};
+    for (const s of STADIUMS) counts[s.confederation] = (counts[s.confederation] || 0) + 1;
+    confSel.innerHTML = "";
+    CONFEDERATIONS.forEach(conf => {
+      const n = conf === "Todas" ? STADIUMS.length : (counts[conf] || 0);
+      if (conf !== "Todas" && n === 0) return;
+      const opt = document.createElement("option");
+      opt.value = conf;
+      opt.textContent = `${conf} (${n})`;
+      confSel.appendChild(opt);
+    });
+    confSel.value = filters.confederation;
+    confSel.addEventListener("change", () => {
+      filters.confederation = confSel.value;
+      applyFilters();
+    });
+  }
+
+  // --- País ---
+  if (countrySel) {
+    countrySel.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "Todos";
+    optAll.textContent = `Todos (${STADIUMS.length})`;
+    countrySel.appendChild(optAll);
+    COUNTRIES.forEach(country => {
+      const n = STADIUMS.filter(s => s.country === country).length;
+      const opt = document.createElement("option");
+      opt.value = country;
+      opt.textContent = `${country} (${n})`;
+      countrySel.appendChild(opt);
+    });
+    countrySel.value = filters.country;
+    countrySel.addEventListener("change", () => {
+      filters.country = countrySel.value;
+      applyFilters();
+    });
+  }
+
+  // --- Capacidad mínima (slider) ---
+  if (capRange) {
+    // Paso "redondo" para que el slider se sienta natural.
+    capRange.min = String(Math.floor(CAP_MIN / 1000) * 1000);
+    capRange.max = String(Math.ceil(CAP_MAX / 1000) * 1000);
+    capRange.step = "1000";
+    capRange.value = String(filters.minCapacity);
+    const fmt = (v) => Number(v).toLocaleString("es") + " espectadores";
+    if (capOut) capOut.textContent = fmt(capRange.value);
+    // input = actualiza etiqueta en vivo; change = redibuja (más barato).
+    capRange.addEventListener("input", () => {
+      if (capOut) capOut.textContent = fmt(capRange.value);
+    });
+    capRange.addEventListener("change", () => {
+      filters.minCapacity = parseInt(capRange.value, 10) || CAP_MIN;
+      applyFilters();
+    });
+  }
+
+  // --- Botón limpiar ---
+  const resetBtn = document.getElementById("filter-reset");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      filters.confederation = "Todas";
+      filters.country = "Todos";
+      filters.minCapacity = CAP_MIN;
+      if (confSel) confSel.value = "Todas";
+      if (countrySel) countrySel.value = "Todos";
+      if (capRange) capRange.value = String(CAP_MIN);
+      if (capOut) capOut.textContent = Number(CAP_MIN).toLocaleString("es") + " espectadores";
+      applyFilters();
+    });
+  }
+
+  updateFilterSummary();
 }
 
 // ---------- Toggle de tema claro/oscuro ----------
@@ -510,6 +667,10 @@ themeBtn.addEventListener("click", () => {
   drawMap();
   drawBar();
 });
+
+// ---------- Botón "Ver mundo" (des-zoom) ----------
+const resetViewBtn = document.getElementById("btn-reset-view");
+if (resetViewBtn) resetViewBtn.addEventListener("click", resetMapView);
 
 // ---------- Init ----------
 applyThemeLabel();

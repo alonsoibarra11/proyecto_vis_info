@@ -19,6 +19,7 @@
     <div class="header-actions">
       <!-- Botón para conectar el Arduino (servo). Oculto por ahora; ver README, sección "Integración con Arduino" para reactivarlo. -->
       <!-- <button id="btn-arduino" class="theme-btn" title="Conectar la maqueta (servo por USB)">🔌 Conectar Arduino</button> -->
+      <button id="btn-reset-view" class="theme-btn" title="Volver a la vista mundial">🌍 Ver mundo</button>
       <button id="btn-theme" class="theme-btn" title="Cambiar modo claro/oscuro">🌙 Modo oscuro</button>
     </div>
   </header>
@@ -35,8 +36,23 @@
         <h2>Ranking de estadios</h2>
       </div>
       <div class="controls">
-        <label for="filter-confederation">Mostrar:</label>
-        <select id="filter-confederation" class="filter-select" title="Filtrar estadios por confederación"></select>
+        <div class="filter-row">
+          <label for="filter-confederation">Confederación</label>
+          <select id="filter-confederation" class="filter-select" title="Filtrar por confederación"></select>
+        </div>
+        <div class="filter-row">
+          <label for="filter-country">País</label>
+          <select id="filter-country" class="filter-select" title="Filtrar por país"></select>
+        </div>
+        <div class="filter-row filter-row--range">
+          <label for="filter-capacity">Capacidad mínima</label>
+          <input type="range" id="filter-capacity" class="filter-range" />
+          <output id="filter-capacity-value" class="filter-range-value"></output>
+        </div>
+        <div class="filter-foot">
+          <span id="filter-summary" class="filter-summary"></span>
+          <button id="filter-reset" class="filter-reset" type="button">Limpiar filtros</button>
+        </div>
       </div>
       <div id="bar"></div>
     </div>

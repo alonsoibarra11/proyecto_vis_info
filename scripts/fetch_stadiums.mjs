@@ -47,7 +47,7 @@ SELECT ?s ?sLabel ?cap ?coord ?countryLabel ?cityLabel ?inception WHERE {
   SERVICE wikibase:label { bd:serviceParam wikibase:language "es,en". }
 }
 ORDER BY DESC(?cap)
-LIMIT ${LIMIT * 6}
+LIMIT ${Math.round(LIMIT * 2.5)}
 `;
 
 // ---------- Mapa país -> confederación (para el filtro de la app) ----------
@@ -62,7 +62,7 @@ const CONFEDERATION = {
   "Noruega": "UEFA", "Dinamarca": "UEFA", "Suiza": "UEFA", "Austria": "UEFA",
   "Irlanda": "UEFA", "República Checa": "UEFA", "Rumania": "UEFA", "Rumanía": "UEFA",
   "Hungría": "UEFA", "Croacia": "UEFA", "Serbia": "UEFA", "Bulgaria": "UEFA",
-  "Gales": "UEFA",
+  "Gales": "UEFA", "Georgia": "UEFA", "Armenia": "UEFA",
   // CONMEBOL (Sudamérica)
   "Brasil": "CONMEBOL", "Argentina": "CONMEBOL", "Chile": "CONMEBOL", "Perú": "CONMEBOL",
   "Colombia": "CONMEBOL", "Uruguay": "CONMEBOL", "Paraguay": "CONMEBOL",
@@ -70,18 +70,21 @@ const CONFEDERATION = {
   // CONCACAF (Norte/Centroamérica y Caribe)
   "México": "CONCACAF", "Estados Unidos": "CONCACAF", "EE.UU.": "CONCACAF",
   "Canadá": "CONCACAF", "Costa Rica": "CONCACAF", "Honduras": "CONCACAF",
-  "Guatemala": "CONCACAF", "Jamaica": "CONCACAF",
+  "Guatemala": "CONCACAF", "Jamaica": "CONCACAF", "Cuba": "CONCACAF",
   // CAF (África)
   "Sudáfrica": "CAF", "Egipto": "CAF", "Marruecos": "CAF", "Argelia": "CAF",
   "Túnez": "CAF", "Nigeria": "CAF", "Ghana": "CAF", "Camerún": "CAF", "Senegal": "CAF",
   "República Democrática del Congo": "CAF", "Zambia": "CAF", "Libia": "CAF",
+  "Zimbabue": "CAF", "Etiopía": "CAF", "Tanzania": "CAF", "Costa de Marfil": "CAF",
+  "Kenia": "CAF", "Somalia": "CAF", "Guinea": "CAF", "Mali": "CAF", "Angola": "CAF",
   // AFC (Asia)
-  "China": "AFC", "República Popular China": "AFC", "Japón": "AFC",
-  "Corea del Sur": "AFC", "Corea del Norte": "AFC",
+  "China": "AFC", "República Popular China": "AFC", "República de China": "AFC",
+  "Japón": "AFC", "Corea del Sur": "AFC", "Corea del Norte": "AFC",
   "Catar": "AFC", "Qatar": "AFC", "Arabia Saudita": "AFC", "Arabia Saudí": "AFC",
   "Irán": "AFC", "Irak": "AFC", "Siria": "AFC", "Kuwait": "AFC",
   "Emiratos Árabes Unidos": "AFC", "India": "AFC", "Indonesia": "AFC",
   "Malasia": "AFC", "Tailandia": "AFC", "Australia": "AFC",
+  "Pakistán": "AFC", "Singapur": "AFC", "Camboya": "AFC", "Birmania": "AFC",
   // OFC (Oceanía)
   "Nueva Zelanda": "OFC"
 };
@@ -109,13 +112,22 @@ async function main() {
   console.log(`Consultando Wikidata (cap ${CAP_MIN}-${CAP_MAX}, top ${LIMIT})...`);
 
   const url = `${ENDPOINT}?format=json&query=${encodeURIComponent(QUERY)}`;
-  const res = await fetch(url, {
-    headers: { "Accept": "application/sparql-results+json", "User-Agent": USER_AGENT }
-  });
-  if (!res.ok) {
-    throw new Error(`WDQS respondió ${res.status} ${res.statusText}`);
+
+  // WDQS a veces devuelve 429/504 bajo carga; reintentamos con backoff.
+  let json = null;
+  const MAX_TRIES = 4;
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    const res = await fetch(url, {
+      headers: { "Accept": "application/sparql-results+json", "User-Agent": USER_AGENT }
+    });
+    if (res.ok) { json = await res.json(); break; }
+    if (attempt === MAX_TRIES) {
+      throw new Error(`WDQS respondió ${res.status} ${res.statusText} tras ${MAX_TRIES} intentos`);
+    }
+    const waitMs = 2000 * attempt;
+    console.warn(`WDQS ${res.status}; reintentando en ${waitMs / 1000}s (intento ${attempt + 1}/${MAX_TRIES})...`);
+    await new Promise(r => setTimeout(r, waitMs));
   }
-  const json = await res.json();
   const rows = json.results.bindings;
   console.log(`Filas crudas recibidas: ${rows.length}`);
 

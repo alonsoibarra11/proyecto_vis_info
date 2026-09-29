@@ -1,13 +1,19 @@
 # proyecto_vis_info — Mapa sonoro de estadios del mundo
 
-Página web interactiva que muestra en un mapa mundial ~200 de los estadios
+Página web interactiva que muestra en un mapa mundial ~400 de los estadios
 más grandes del mundo (datos de **Wikidata**). Cada estadio se representa con
 una **foto** sobre su ubicación (más grande cuanto mayor es su capacidad). Al
 hacer click suena un **grito de multitud** (`assets/crowd-cheer.mp3`), cuyo
 **volumen crece con la capacidad** del estadio. A un costado hay un gráfico de
-barras con el ranking por **capacidad**, y un **filtro por confederación**
-(UEFA, CONMEBOL, CONCACAF, CAF, AFC, OFC) que controla qué estadios se muestran
-tanto en el mapa como en el ranking.
+barras con el ranking por **capacidad** y un **panel de filtros combinables**
+que controla qué estadios se muestran tanto en el mapa como en el ranking:
+
+- **Confederación** (UEFA, CONMEBOL, CONCACAF, CAF, AFC, OFC).
+- **País** (todos los países presentes en el dataset).
+- **Capacidad mínima** (deslizador).
+
+Los filtros se aplican en conjunto (AND) y hay un contador de resultados y un
+botón para limpiarlos.
 
 Además, la página puede **fisicalizar** el gol: al conectar un **Arduino con
 un servo** por USB, la plataforma de una maqueta tiembla con una intensidad
@@ -41,6 +47,14 @@ los CDN no cargan bien con `file://`):
 ```bash
 node server.js
 # abre http://localhost:8000
+```
+
+El servidor lee `PORT`, `HOST` y `STATIC_ROOT` desde `.env` (ver más abajo). Si
+el puerto ya está en uso, arranca en otro:
+
+```bash
+PORT=8001 node server.js
+# o libera el 8000:  lsof -ti tcp:8000 | xargs kill
 ```
 
 ## Fuente de datos
@@ -94,7 +108,8 @@ El archivo `.env` está ignorado por Git y no debe subirse al repositorio.
 ## Uso
 1. Click en la foto de un estadio del mapa → suena el grito de multitud.
 2. Las fotos más grandes = estadios con más capacidad = sonido más fuerte.
-3. El selector **"Mostrar"** filtra por confederación (mapa y ranking a la vez).
+3. El panel de filtros (confederación, país, capacidad mínima) acota qué
+   estadios se ven en el mapa y en el ranking. "Limpiar filtros" los reinicia.
 4. Click en una barra también reproduce el sonido del estadio.
 
 ## Tema claro / oscuro
