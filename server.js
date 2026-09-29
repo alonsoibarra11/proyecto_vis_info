@@ -12,7 +12,13 @@ const TYPES = {
   ".css": "text/css; charset=utf-8",
   ".json": "application/json",
   ".mp3": "audio/mpeg",
-  ".wav": "audio/wav"
+  ".wav": "audio/wav",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".gif": "image/gif"
 };
 
 http.createServer((req, res) => {

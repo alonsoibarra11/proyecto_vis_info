@@ -1,10 +1,13 @@
 # proyecto_vis_info — Mapa sonoro de estadios del mundo
 
-Página web interactiva que muestra en un mapa mundial los estadios más
-importantes del mundo. Al hacer click en un estadio suena un **"¡GOOOOL!"**
-sintetizado, cuya **intensidad crece con la capacidad y el tamaño** del
-estadio. A un costado hay un gráfico de barras con el ranking de estadios,
-conmutable entre **capacidad** y **superficie (m²)**.
+Página web interactiva que muestra en un mapa mundial ~200 de los estadios
+más grandes del mundo (datos de **Wikidata**). Cada estadio se representa con
+una **foto** sobre su ubicación (más grande cuanto mayor es su capacidad). Al
+hacer click suena un **grito de multitud** (`assets/crowd-cheer.mp3`), cuyo
+**volumen crece con la capacidad** del estadio. A un costado hay un gráfico de
+barras con el ranking por **capacidad**, y un **filtro por confederación**
+(UEFA, CONMEBOL, CONCACAF, CAF, AFC, OFC) que controla qué estadios se muestran
+tanto en el mapa como en el ranking.
 
 Además, la página puede **fisicalizar** el gol: al conectar un **Arduino con
 un servo** por USB, la plataforma de una maqueta tiembla con una intensidad
@@ -15,17 +18,21 @@ Observa la página en el siguiente link: https://alonsoibarra11.github.io/proyec
 
 ## Tecnologías
 - **Plotly.js** — `scattergeo` para el mapa mundial y `bar` para el ranking.
-- **Tone.js** — síntesis en vivo del "GOOOOL" (grito con vibrato + rugido de multitud).
+- **Tone.js** — reproduce el archivo de sonido (`Tone.Player`) y mide su nivel (`Tone.Meter`).
 - **Web Serial API** — comunicación con el Arduino por USB (Chrome/Edge).
+- **Wikidata (SPARQL)** — fuente de datos de los estadios (ver *Fuente de datos*).
 - HTML/CSS/JS puro, sin build.
 
 ## Archivos
 - `index.html` — estructura de la página y carga de CDN.
 - `styles.css` — estilos (tema oscuro tipo estadio nocturno).
-- `data.js` — datos de los estadios (capacidad, área, coordenadas).
-- `app.js` — mapa, gráfico de barras y motor de sonido (`playGoal`).
+- `data.js` — datos de los estadios (**generado** desde Wikidata, no editar a mano).
+- `app.js` — mapa, ranking, filtro y motor de sonido (`playGoal`).
 - `arduino.js` — puente con el Arduino/servo vía Web Serial (fisicalización).
 - `server.js` — servidor estático mínimo para previsualizar.
+- `scripts/fetch_stadiums.mjs` — script que baja los datos de Wikidata y regenera `data.js`.
+- `assets/estadio.png` — imagen (sin fondo) usada como marcador de cada estadio en el mapa.
+- `assets/crowd-cheer.mp3` — grito de multitud que suena al hacer click.
 
 ## Cómo ejecutar
 Necesita servirse por HTTP (el audio del navegador requiere interacción y
@@ -35,6 +42,34 @@ los CDN no cargan bien con `file://`):
 node server.js
 # abre http://localhost:8000
 ```
+
+## Fuente de datos
+Los estadios provienen de **[Wikidata](https://www.wikidata.org)**, cuyos datos
+están bajo licencia **CC0** (dominio público). El archivo `data.js` es
+**generado automáticamente** por `scripts/fetch_stadiums.mjs` y no debe editarse
+a mano.
+
+Cada estadio incluye: `name`, `city`, `country`, `confederation`, `capacity`,
+`year` (año de inauguración, puede ser `null`) y `lat`/`lon`.
+
+Para regenerar el dataset (requiere Node 18+ con `fetch` nativo):
+
+```bash
+node scripts/fetch_stadiums.mjs
+# opciones: --limit 200 (nº de estadios) --min 15000 --max 130000 (rango de capacidad)
+```
+
+El script consulta el endpoint SPARQL de Wikidata (WDQS), pide estadios con
+capacidad y coordenadas, **filtra valores absurdos** (por defecto capacidad
+entre 15.000 y 130.000), deduplica, ordena por capacidad y escribe los `--limit`
+más grandes. La confederación se deriva del país mediante una tabla en el propio
+script.
+
+> Notas sobre los datos abiertos: al ser una fuente colaborativa, algunos
+> registros pueden ser estadios históricos/demolidos, recintos de otros deportes
+> (p. ej. fútbol americano en EE.UU.) o traer la ciudad como distrito
+> administrativo. El filtro de capacidad reduce el ruido pero no lo elimina del
+> todo; ajusta `--min`/`--max` o la tabla de confederaciones si lo necesitas.
 
 ## Variables de entorno
 La configuración se define en un archivo `.env` en la raíz del proyecto. Se
@@ -57,28 +92,42 @@ cp .env.example .env
 El archivo `.env` está ignorado por Git y no debe subirse al repositorio.
 
 ## Uso
-1. Click en un punto del mapa → suena la barra brava de ese estadio.
-2. Los puntos más grandes/rojos = estadios más grandes = sonido más intenso.
-3. Botones "Por capacidad" / "Por tamaño (m²)" cambian el gráfico de barras.
-4. Click en una barra también reproduce el cántico.
+1. Click en la foto de un estadio del mapa → suena el grito de multitud.
+2. Las fotos más grandes = estadios con más capacidad = sonido más fuerte.
+3. El selector **"Mostrar"** filtra por confederación (mapa y ranking a la vez).
+4. Click en una barra también reproduce el sonido del estadio.
 
 ## Tema claro / oscuro
 La página abre en **modo claro** por defecto. El botón superior derecho
 alterna entre claro y oscuro; ambos gráficos se redibujan con la paleta del
 tema activo.
 
-## Notas sobre el sonido
-El "¡GOOOOL!" es 100% sintetizado con Tone.js y **no utiliza archivos de
-audio**: es un grito ascendente y sostenido (dos osciladores con vibrato y un
-filtro que imita el formante de una vocal abierta) sobre un rugido de
-multitud que explota. El código está en `app.js`, función `playGoal`.
+## Notas sobre el mapa
+`scattergeo` de Plotly no admite imágenes como símbolo de marcador, así que la
+foto de cada estadio se dibuja como una capa de `<img>` (`#stadium-images`)
+superpuesta al mapa. Los puntos del `scattergeo` siguen existiendo pero son
+**invisibles**: solo capturan el click y el tooltip. En cada render (zoom, pan
+o resize) `positionStadiumImages()` reubica cada foto leyendo la **posición real
+de cada punto que Plotly ya dibujó** en el SVG (así la alineación es exacta); si
+esa capa no estuviera disponible, cae a la proyección interna de Plotly. El
+tamaño de la foto escala con la capacidad del estadio. Para cambiar la foto,
+reemplaza `assets/estadio.png` (o edita la constante `STADIUM_IMG` en `app.js`).
 
-> ¿Por qué sintetizado y no un `.mp3`? Porque al generar el sonido en vivo
-> podemos leer su **nivel de amplitud en tiempo real** con un `Tone.Meter` y
-> usar esa señal para el temblor del servo. Nota: Tone.js no reproduce la
-> palabra "GOOOOL" con voz humana real; produce un grito estilizado de
-> celebración. Si se necesitara la voz literal, habría que usar un archivo de
-> audio (y analizar su amplitud con `Tone.Player` + `Tone.Meter`).
+## Notas sobre el sonido
+El sonido es el archivo **`assets/crowd-cheer.mp3`**, reproducido con
+`Tone.Player`. El código está en `app.js`, función `playGoal`.
+
+- El **volumen es proporcional a la capacidad** del estadio: va de `0.30`
+  (estadio chico) a `1.0` (estadio enorme). Ver la variable `vol` en `playGoal`.
+- Se mantiene un **`Tone.Meter`** conectado a la salida para leer el nivel de
+  audio en vivo (0..1) y publicarlo en el bus como `goal:level`, que alimenta
+  el temblor del servo del Arduino.
+- Para cambiar el sonido, reemplaza `assets/crowd-cheer.mp3` (o edita la
+  constante `CROWD_SOUND` en `app.js`). El buffer se carga una sola vez con
+  `Tone.loaded()` en el primer click.
+
+> El navegador solo permite audio tras una interacción del usuario, por eso el
+> sonido se inicializa en el primer click sobre un estadio.
 
 ## Integración con Arduino (fisicalización del gol)
 La página emite eventos que un módulo de hardware puede escuchar, sin acoplar

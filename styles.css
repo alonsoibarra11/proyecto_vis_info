@@ -99,6 +99,29 @@ header p {
   height: 100%;
 }
 
+/* ===== Fotos de estadio superpuestas al mapa ===== */
+#stadium-images {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;   /* solo las <img> reciben clicks */
+  z-index: 3;
+}
+
+.stadium-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);   /* centrar en la coordenada */
+  object-fit: contain;                 /* respeta la forma del PNG sin recortar */
+  /* sombra que sigue el contorno transparente del PNG */
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.stadium-pin:hover {
+  transform: translate(-50%, -50%) scale(1.18);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.65));
+}
+
 /* ===== Panel de ranking a la izquierda, altura completa, transparente ===== */
 .side-panel {
   position: absolute;
@@ -145,6 +168,24 @@ header p {
   flex-wrap: wrap;
   align-items: center;
 }
+
+.controls label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.filter-select {
+  background: var(--panel-solid);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.filter-select:hover { border-color: var(--accent-2); }
+.filter-select:focus { outline: none; border-color: var(--accent); }
 
 button.toggle {
   background: transparent;

@@ -1,8 +1,9 @@
 /* ============================================================
    Estadios del mundo — mapa sonoro
    - Plotly scattergeo para el mapa
-   - Plotly bar para el ranking (capacidad / área)
-   - Tone.js para sintetizar un "GOOOOL!" de celebración
+   - Plotly bar para el ranking (por capacidad)
+   - Filtro de estadios por confederación
+   - Tone.js para el grito de multitud
    - Bus de eventos para fisicalización (Arduino / servo)
    ============================================================ */
 
@@ -23,16 +24,40 @@ window.StadiumBus = StadiumBus;
 
 // ---------- Utilidades de escala ----------
 const capacities = STADIUMS.map(s => s.capacity);
-const areas = STADIUMS.map(s => s.areaM2);
 const CAP_MIN = Math.min(...capacities), CAP_MAX = Math.max(...capacities);
-const AREA_MIN = Math.min(...areas), AREA_MAX = Math.max(...areas);
 
-// Devuelve 0..1 según cuán grande/lleno es el estadio.
-// Combinamos capacidad (peso 0.65) y área (peso 0.35) para la "intensidad".
+// Devuelve 0..1 según la capacidad del estadio (más aforo = más intenso).
 function intensityOf(st) {
-  const capN = (st.capacity - CAP_MIN) / (CAP_MAX - CAP_MIN || 1);
-  const areaN = (st.areaM2 - AREA_MIN) / (AREA_MAX - AREA_MIN || 1);
-  return 0.65 * capN + 0.35 * areaN; // 0..1
+  return (st.capacity - CAP_MIN) / (CAP_MAX - CAP_MIN || 1); // 0..1
+}
+
+// ============================================================
+//  FILTROS DE ESTADIOS (combinables, se aplican con AND)
+//  `visibleStadiums()` devuelve el subconjunto activo; el mapa y el
+//  ranking se dibujan siempre a partir de este subconjunto.
+//    - confederation: "Todas" o una confederación concreta
+//    - country:       "Todos" o un país concreto
+//    - minCapacity:   capacidad mínima (espectadores)
+// ============================================================
+const CONFEDERATIONS = ["Todas", "UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC"];
+
+const filters = {
+  confederation: "Todas",
+  country: "Todos",
+  minCapacity: CAP_MIN
+};
+
+// Países presentes en el dataset, ordenados alfabéticamente (para el <select>).
+const COUNTRIES = [...new Set(STADIUMS.map(s => s.country).filter(Boolean))]
+  .sort((a, b) => a.localeCompare(b, "es"));
+
+function visibleStadiums() {
+  return STADIUMS.filter(s => {
+    if (filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
+    if (filters.country !== "Todos" && s.country !== filters.country) return false;
+    if (s.capacity < filters.minCapacity) return false;
+    return true;
+  });
 }
 
 // ============================================================
@@ -73,58 +98,44 @@ function palette() {
 }
 
 // ============================================================
-//  SONIDO — "GOOOOL!" sintetizado con Tone.js (sin archivos)
-//  Un grito ascendente y sostenido (voz estilizada con vibrato)
-//  sobre un rugido de multitud que explota. Todo se genera en
-//  vivo, así podemos leer el nivel de audio en tiempo real con
-//  un Tone.Meter y usarlo para el temblor del servo (Arduino).
+//  SONIDO — Grito de multitud (archivo assets/crowd-cheer.mp3)
+//  Reproducimos el mp3 con Tone.Player; el VOLUMEN es
+//  proporcional a la intensidad del estadio (más grande y con
+//  más aforo => más fuerte). Mantenemos un Tone.Meter para leer
+//  el nivel en vivo y alimentar el temblor del servo (Arduino).
 // ============================================================
+const CROWD_SOUND = "assets/crowd-cheer.mp3";
+
 let audioReady = false;
-let crowdNoise, crowdFilter, crowdGain;    // rugido de la multitud
-let voiceA, voiceB, voiceGain;             // "voces" del GOOOOL (osciladores)
-let vibrato, voiceFilter;                  // vibrato + formante del grito
-let reverb, masterGain, meter;             // salida + medidor de nivel
+let audioLoading = null;                    // promesa de carga del buffer
+let player, playerGain, masterGain, meter;  // reproductor + salida + medidor
 let stopTimer = null;
 let levelRAF = null;                        // requestAnimationFrame del medidor
 
 async function initAudio() {
   if (audioReady) return;
-  await Tone.start();
+  if (audioLoading) return audioLoading;    // ya se está cargando
 
-  masterGain = new Tone.Gain(0.9).toDestination();
+  audioLoading = (async () => {
+    await Tone.start();
 
-  // Medidor de nivel en vivo (0..1 aprox tras normalizar dB).
-  meter = new Tone.Meter({ smoothing: 0.85 });
-  masterGain.connect(meter);
+    masterGain = new Tone.Gain(1).toDestination();
 
-  reverb = new Tone.Reverb({ decay: 3.2, wet: 0.3 }).connect(masterGain);
+    // Medidor de nivel en vivo (para el bus del Arduino).
+    meter = new Tone.Meter({ smoothing: 0.85 });
+    masterGain.connect(meter);
 
-  // --- Rugido de multitud: ruido rosa por un pasa-banda con "oleaje" ---
-  crowdGain = new Tone.Gain(0).connect(reverb);
-  crowdFilter = new Tone.Filter({ type: "bandpass", frequency: 800, Q: 0.5 }).connect(crowdGain);
-  crowdNoise = new Tone.Noise("pink").connect(crowdFilter);
-  crowdNoise.start();
-  const crowdLFO = new Tone.LFO({ frequency: 0.4, min: 500, max: 1300 }).start();
-  crowdLFO.connect(crowdFilter.frequency);
+    // Gain que module el volumen según la intensidad del estadio.
+    playerGain = new Tone.Gain(0).connect(masterGain);
 
-  // --- "Voz" del GOOOOL: dos osciladores (grito) con vibrato y un ---
-  //     filtro que imita el formante de una vocal abierta ("ooo").
-  voiceFilter = new Tone.Filter({ type: "bandpass", frequency: 900, Q: 3 }).connect(reverb);
-  voiceGain = new Tone.Gain(0).connect(voiceFilter);
+    // Cargamos el mp3 y esperamos a que el buffer esté listo.
+    player = new Tone.Player({ url: CROWD_SOUND, autostart: false }).connect(playerGain);
+    await Tone.loaded();                     // espera a que TODOS los buffers carguen
 
-  voiceA = new Tone.Oscillator({ type: "sawtooth", frequency: 220 }).connect(voiceGain);
-  voiceB = new Tone.Oscillator({ type: "square",  frequency: 223 }).connect(voiceGain); // leve desafine = coro
-  voiceA.start();
-  voiceB.start();
+    audioReady = true;
+  })();
 
-  // Vibrato del grito (le da la vibración humana al "GOOOOL").
-  // El LFO oscila directamente en cents (±100 ≈ ±1 semitono) y se
-  // conecta al detune de ambos osciladores.
-  vibrato = new Tone.LFO({ frequency: 5.5, min: -100, max: 100 }).start();
-  vibrato.connect(voiceA.detune);
-  vibrato.connect(voiceB.detune);
-
-  audioReady = true;
+  return audioLoading;
 }
 
 // Lee el medidor y publica el nivel (0..1) para el Arduino.
@@ -148,9 +159,12 @@ function stopLevelPump() {
 function stopAllSound(fast = true) {
   if (!audioReady) return;
   if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
-  const t = fast ? 0.15 : 0.5;
-  crowdGain.gain.rampTo(0, t);
-  voiceGain.gain.rampTo(0, t);
+  const t = fast ? 0.12 : 0.4;
+  playerGain.gain.rampTo(0, t);
+  if (player && player.state === "started") {
+    // Paramos un poco después del fade para que no corte de golpe.
+    try { player.stop("+" + (t + 0.05)); } catch (_) { /* noop */ }
+  }
   stopLevelPump();
   emitBus("goal:stop", {});
 }
@@ -161,49 +175,30 @@ async function playGoal(stadium) {
 
   const intensity = intensityOf(stadium); // 0..1
 
-  // Volúmenes proporcionales a la intensidad del estadio.
-  const crowdVol = 0.15 + intensity * 0.5;
-  const voiceVol = 0.18 + intensity * 0.55;
-
-  // La nota base del grito sube un poco con la intensidad (más épico).
-  const baseFreq = 180 + intensity * 90; // 180..270 Hz
+  // Volumen proporcional a la intensidad: 0.30 (chico) .. 1.0 (enorme).
+  const vol = 0.30 + intensity * 0.70;
 
   const now = Tone.now();
 
-  // 1) La multitud explota de golpe y luego se sostiene.
-  crowdGain.gain.cancelScheduledValues(now);
-  crowdGain.gain.setValueAtTime(0.0001, now);
-  crowdGain.gain.exponentialRampToValueAtTime(crowdVol, now + 0.15);
+  // Reinicia el reproductor desde el principio y sube el volumen.
+  try { if (player.state === "started") player.stop(now); } catch (_) { /* noop */ }
+  player.start(now + 0.02);
 
-  // 2) El "GOOOOL": barrido de frecuencia ascendente (portamento) +
-  //    apertura del formante (el filtro sube) = sensación de grito.
-  voiceA.frequency.cancelScheduledValues(now);
-  voiceB.frequency.cancelScheduledValues(now);
-  voiceA.frequency.setValueAtTime(baseFreq * 0.75, now);
-  voiceB.frequency.setValueAtTime(baseFreq * 0.75 + 3, now);
-  // Sube rápido (la "G-O") y se sostiene en la "OOOO".
-  voiceA.frequency.exponentialRampToValueAtTime(baseFreq, now + 0.35);
-  voiceB.frequency.exponentialRampToValueAtTime(baseFreq + 3, now + 0.35);
+  playerGain.gain.cancelScheduledValues(now);
+  playerGain.gain.setValueAtTime(0.0001, now);
+  playerGain.gain.linearRampToValueAtTime(vol, now + 0.12);
 
-  voiceFilter.frequency.cancelScheduledValues(now);
-  voiceFilter.frequency.setValueAtTime(500, now);
-  voiceFilter.frequency.exponentialRampToValueAtTime(1400, now + 0.4);
-  voiceFilter.frequency.exponentialRampToValueAtTime(700, now + 3.2);
-
-  // Envolvente del grito: ataque marcado, sostiene y decae.
-  voiceGain.gain.cancelScheduledValues(now);
-  voiceGain.gain.setValueAtTime(0.0001, now);
-  voiceGain.gain.exponentialRampToValueAtTime(voiceVol, now + 0.12);
-  voiceGain.gain.setValueAtTime(voiceVol, now + 2.4);
-  voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 4.0);
-
-  // Duración total del festejo escala levemente con la intensidad.
-  const durationMs = 3500 + Math.round(intensity * 1500); // 3.5s..5s
+  // Duración: el clip completo, o un máximo que crece con la intensidad.
+  const clipMs = (player.buffer && player.buffer.duration)
+    ? player.buffer.duration * 1000
+    : 4000;
+  const maxMs = 3500 + Math.round(intensity * 2000); // 3.5s..5.5s
+  const durationMs = Math.min(clipMs, maxMs);
 
   // Nivel de audio en vivo → bus → Arduino.
   startLevelPump();
 
-  // Aviso a quien fisicalice (Arduino/servo): empieza el gol.
+  // Aviso a quien fisicalice (Arduino/servo): empieza el festejo.
   emitBus("goal:start", { stadium, intensity, durationMs });
 
   stopTimer = setTimeout(() => stopAllSound(false), durationMs);
@@ -220,32 +215,28 @@ let mapInitialized = false;
 
 function drawMap() {
   const p = palette();
-  const sizes = STADIUMS.map(s => 10 + intensityOf(s) * 26); // tamaño del punto
-  const colors = STADIUMS.map(s => intensityOf(s));
+  const list = visibleStadiums();                 // subconjunto activo (filtro)
+  mapList = list;                                  // fuente única para el overlay
+  const sizes = list.map(s => 10 + intensityOf(s) * 26); // tamaño del punto
 
+  // El scattergeo sigue existiendo como CAPA DE CLICK/HOVER: marcadores
+  // casi transparentes que capturan el click y muestran el tooltip. Encima
+  // dibujamos la foto del estadio como overlay HTML (ver positionStadiumImages).
   const trace = {
     type: "scattergeo",
     mode: "markers",
-    lat: STADIUMS.map(s => s.lat),
-    lon: STADIUMS.map(s => s.lon),
-    text: STADIUMS.map(s =>
+    lat: list.map(s => s.lat),
+    lon: list.map(s => s.lon),
+    text: list.map(s =>
       `<b>${s.name}</b><br>${s.city}, ${s.country}` +
       `<br>Capacidad: ${s.capacity.toLocaleString("es")}` +
-      `<br>Superficie: ${s.areaM2.toLocaleString("es")} m²`),
+      (s.year ? `<br>Inaugurado: ${s.year}` : "")),
     hoverinfo: "text",
     marker: {
       size: sizes,
-      color: colors,
-      colorscale: [[0, "#2b6cb0"], [0.5, "#f2a900"], [1, "#e53e3e"]],
-      cmin: 0, cmax: 1,
-      opacity: 0.92,
-      line: { color: p.markerLine, width: 1 },
-      colorbar: {
-        title: { text: "Intensidad", font: { color: p.text } },
-        tickfont: { color: p.muted },
-        outlinecolor: p.grid,
-        len: 0.7, x: 0.99, xanchor: "right"
-      }
+      color: "rgba(0,0,0,0)",           // invisible: la foto va encima
+      line: { color: "rgba(0,0,0,0)", width: 0 },
+      opacity: 0.01                      // casi 0 pero clickeable
     }
   };
 
@@ -265,29 +256,176 @@ function drawMap() {
 
   Plotly.react("map", [trace], layout, { responsive: true, displayModeBar: false })
     .then(gd => {
+      buildStadiumImages(list);      // (re)crea los <img> del subconjunto activo
+      positionStadiumImages(gd);     // los coloca según la posición actual
+      // Los <path> del scattergeo pueden aparecer un tick después del primer
+      // render; reposicionamos en el siguiente frame para asegurar alineación.
+      requestAnimationFrame(() => positionStadiumImages(gd));
       if (!mapInitialized) {
         gd.on("plotly_click", ev => {
           const pt = ev.points[0];
-          if (pt) playGoal(STADIUMS[pt.pointIndex]);
+          if (pt && mapList[pt.pointIndex]) playGoal(mapList[pt.pointIndex]);
         });
+        // Reposicionar las fotos en cada render (zoom, pan, resize).
+        gd.on("plotly_afterplot", () => positionStadiumImages(gd));
+        gd.on("plotly_relayout", () => positionStadiumImages(gd));
+        window.addEventListener("resize", () => positionStadiumImages(gd));
         mapInitialized = true;
       }
     });
 }
 
 // ============================================================
+//  OVERLAY DE FOTOS DE ESTADIO sobre el mapa
+//  scattergeo no admite imágenes como símbolo de marcador, así que
+//  superponemos un <img> por estadio. Para alinearlo con exactitud,
+//  leemos la posición real de cada punto que Plotly ya dibujó en el
+//  SVG (readPlottedPointPositions); si no estuviera disponible,
+//  caemos a la proyección geo interna (getGeoProjector).
+// ============================================================
+const STADIUM_IMG = "assets/estadio.png";
+let stadiumImgEls = [];
+let mapList = STADIUMS;   // lista de estadios actualmente dibujada en el mapa
+
+function imgContainer() {
+  return document.getElementById("stadium-images");
+}
+
+// (Re)crea los <img> para la lista dada (el subconjunto visible del filtro).
+function buildStadiumImages(list) {
+  const cont = imgContainer();
+  if (!cont) return;
+  cont.innerHTML = "";
+  stadiumImgEls = list.map((s) => {
+    const el = document.createElement("img");
+    el.src = STADIUM_IMG;
+    el.className = "stadium-pin";
+    el.alt = s.name;
+    el.title = `${s.name} — ${s.city}, ${s.country}`;
+    // Click en la foto = mismo efecto que click en el punto.
+    el.addEventListener("click", () => playGoal(s));
+    cont.appendChild(el);
+    return el;
+  });
+}
+
+// Coloca cada foto en pixel según la proyección geo actual y le da un
+// tamaño proporcional a la intensidad del estadio.
+// Obtiene una función que convierte [lon, lat] -> {x, y} en pixel del
+// subplot geo. Plotly (interno) expone la proyección d3 de distintas formas
+// según versión; probamos las conocidas y normalizamos la salida.
+function getGeoProjector(gd) {
+  const geo = gd && gd._fullLayout && gd._fullLayout.geo;
+  const sp = geo && geo._subplot;
+  if (!sp) return null;
+
+  // Normaliza distintos formatos de retorno a {x, y}.
+  const norm = (r) => {
+    if (!r) return null;
+    if (Array.isArray(r)) return { x: r[0], y: r[1] };
+    if (typeof r.x === "number" && typeof r.y === "number") return { x: r.x, y: r.y };
+    return null;
+  };
+
+  // PREFERIMOS sp.projection([lon,lat]): devuelve pixeles RELATIVOS AL DIV
+  // COMPLETO del gráfico (que es el mismo sistema que #stadium-images, en
+  // inset:0). En cambio sp.project() ya resta xaxis/yaxis._offset y quedaría
+  // desplazado respecto al contenedor de imágenes.
+  if (typeof sp.projection === "function") {
+    return (lon, lat) => norm(sp.projection([lon, lat]));
+  }
+  // Fallback: sp.project() -> hay que volver a SUMAR el offset del subplot
+  // para llevarlo al sistema del div completo.
+  if (typeof sp.project === "function") {
+    const xOff = (sp.xaxis && sp.xaxis._offset) || 0;
+    const yOff = (sp.yaxis && sp.yaxis._offset) || 0;
+    return (lon, lat) => {
+      const p = norm(sp.project([lon, lat]));
+      return p ? { x: p.x + xOff, y: p.y + yOff } : null;
+    };
+  }
+  return null;
+}
+
+// Lee la posición EXACTA en pantalla de cada punto que Plotly ya dibujó en
+// el SVG (elementos <path class="point">). Es lo más fiable: usamos las
+// mismas coordenadas que Plotly calculó, sin reimplementar la proyección.
+// Devuelve un array de {x, y} (relativo al contenedor cont) o null por punto.
+function readPlottedPointPositions(gd, cont) {
+  const pts = gd.querySelectorAll(".scatterlayer .trace .point");
+  if (!pts || pts.length === 0) return null;
+
+  const contRect = cont.getBoundingClientRect();
+  const positions = new Array(mapList.length).fill(null);
+
+  pts.forEach((node) => {
+    // El índice del dato viene en node.__data__.i (o .index) según Plotly.
+    const d = node.__data__;
+    let idx = null;
+    if (d) idx = (typeof d.i === "number") ? d.i : (typeof d.index === "number" ? d.index : null);
+    // El centro real del punto = centro de su bounding box en pantalla.
+    const r = node.getBoundingClientRect();
+    const x = r.left + r.width / 2 - contRect.left;
+    const y = r.top + r.height / 2 - contRect.top;
+    if (idx == null) {
+      // Sin índice fiable: asignamos en orden de aparición.
+      const free = positions.indexOf(null);
+      if (free !== -1) positions[free] = { x, y };
+    } else if (idx >= 0 && idx < positions.length) {
+      positions[idx] = { x, y };
+    }
+  });
+
+  return positions;
+}
+
+function positionStadiumImages(gd) {
+  const cont = imgContainer();
+  if (!cont || !gd || !gd._fullLayout || !gd._fullLayout.geo) return;
+
+  // 1) Vía preferida: leer la posición real de los puntos ya dibujados.
+  let positions = readPlottedPointPositions(gd, cont);
+
+  // 2) Fallback: proyección geo interna de Plotly.
+  let project = null;
+  if (!positions) {
+    project = getGeoProjector(gd);
+    if (!project) return; // no rompemos nada si nada está disponible
+  }
+
+  mapList.forEach((s, i) => {
+    const el = stadiumImgEls[i];
+    if (!el) return;
+
+    const px = positions ? positions[i] : project(s.lon, s.lat);
+    if (!px || !isFinite(px.x) || !isFinite(px.y)) { el.style.display = "none"; return; }
+
+    // Tamaño: 26px..66px según intensidad.
+    const size = 26 + intensityOf(s) * 40;
+    el.style.display = "block";
+    el.style.width = size + "px";
+    el.style.height = size + "px";
+    el.style.left = px.x + "px";
+    el.style.top = px.y + "px";
+    // z-index: los estadios más intensos, al frente.
+    el.style.zIndex = String(3 + Math.round(intensityOf(s) * 10));
+  });
+}
+
+// ============================================================
 //  GRÁFICO DE BARRAS — capacidad / área conmutable
 // ============================================================
-let currentMetric = "capacity";
+// Cuántas barras mostrar como máximo (el dataset tiene ~200 estadios).
+const BAR_TOP_N = 30;
 
-function drawBar(metric) {
-  currentMetric = metric;
-  const isCap = metric === "capacity";
+function drawBar() {
   const p = palette();
 
-  // Ordenamos de mayor a menor por la métrica elegida.
-  const sorted = [...STADIUMS].sort((a, b) => b[metric] - a[metric]);
-  const values = sorted.map(s => s[metric]);
+  // Ranking por capacidad del subconjunto visible (filtro), top N.
+  const sorted = [...visibleStadiums()]
+    .sort((a, b) => b.capacity - a.capacity)
+    .slice(0, BAR_TOP_N);
+  const values = sorted.map(s => s.capacity);
   const labels = sorted.map(s => s.name);
 
   const trace = {
@@ -298,14 +436,10 @@ function drawBar(metric) {
     customdata: sorted,
     marker: {
       color: values,
-      colorscale: isCap
-        ? [[0, "#2b6cb0"], [1, "#f2a900"]]
-        : [[0, "#2b6cb0"], [1, "#e53e3e"]],
+      colorscale: [[0, "#2b6cb0"], [1, "#f2a900"]],
       line: { color: p.markerLine, width: 0.5 }
     },
-    hovertemplate: isCap
-      ? "<b>%{y}</b><br>Capacidad: %{x:,} espectadores<extra></extra>"
-      : "<b>%{y}</b><br>Superficie: %{x:,} m²<extra></extra>"
+    hovertemplate: "<b>%{y}</b><br>Capacidad: %{x:,} espectadores<extra></extra>"
   };
 
   const layout = {
@@ -315,7 +449,7 @@ function drawBar(metric) {
     margin: { l: 210, r: 16, t: 6, b: 44 },
     bargap: 0.18,
     xaxis: {
-      title: { text: isCap ? "Capacidad (espectadores)" : "Superficie (m²)" },
+      title: { text: "Capacidad (espectadores)" },
       gridcolor: p.grid, zerolinecolor: p.grid, tickfont: { size: 10 },
       showline: false
     },
@@ -337,18 +471,29 @@ function drawBar(metric) {
     });
 }
 
-// ---------- Toggle de métrica ----------
-document.getElementById("btn-cap").addEventListener("click", () => {
-  setActive("btn-cap");
-  drawBar("capacity");
-});
-document.getElementById("btn-area").addEventListener("click", () => {
-  setActive("btn-area");
-  drawBar("areaM2");
-});
-function setActive(id) {
-  document.querySelectorAll("button.toggle").forEach(b => b.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
+// ---------- Filtro por confederación ----------
+function buildFilter() {
+  const sel = document.getElementById("filter-confederation");
+  if (!sel) return;
+  // Cuenta de estadios por confederación, para mostrar (n) en cada opción.
+  const counts = {};
+  for (const s of STADIUMS) counts[s.confederation] = (counts[s.confederation] || 0) + 1;
+
+  sel.innerHTML = "";
+  CONFEDERATIONS.forEach(conf => {
+    const n = conf === "Todas" ? STADIUMS.length : (counts[conf] || 0);
+    if (conf !== "Todas" && n === 0) return; // no ofrecer confederaciones vacías
+    const opt = document.createElement("option");
+    opt.value = conf;
+    opt.textContent = `${conf} (${n})`;
+    sel.appendChild(opt);
+  });
+  sel.value = activeConfederation;
+  sel.addEventListener("change", () => {
+    activeConfederation = sel.value;
+    drawMap();
+    drawBar();
+  });
 }
 
 // ---------- Toggle de tema claro/oscuro ----------
@@ -363,10 +508,11 @@ themeBtn.addEventListener("click", () => {
   applyThemeLabel();
   // Redibujamos ambos gráficos con la nueva paleta.
   drawMap();
-  drawBar(currentMetric);
+  drawBar();
 });
 
 // ---------- Init ----------
 applyThemeLabel();
+buildFilter();
 drawMap();
-drawBar("capacity");
+drawBar();

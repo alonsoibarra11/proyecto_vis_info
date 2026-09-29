@@ -14,7 +14,7 @@
   <header>
     <div class="header-text">
       <h1>⚽ Estadios más importantes del mundo</h1>
-      <p>Haz click en un estadio del mapa para escuchar a su barra brava. La intensidad del cántico crece con la capacidad y el tamaño del estadio.</p>
+      <p>Haz click en un estadio del mapa para escuchar a su hinchada. El volumen del festejo crece con la capacidad del estadio.</p>
     </div>
     <div class="header-actions">
       <!-- Botón para conectar el Arduino (servo). Oculto por ahora; ver README, sección "Integración con Arduino" para reactivarlo. -->
@@ -26,6 +26,8 @@
   <!-- Componente único: el mapa ocupa todo y el ranking va fijo a la izquierda -->
   <div class="stage">
     <div id="map"></div>
+    <!-- Fotos de estadio superpuestas al mapa (posicionadas por app.js) -->
+    <div id="stadium-images"></div>
 
     <!-- Panel del ranking a la izquierda, altura completa, fondo transparente -->
     <div class="side-panel" id="ranking-panel">
@@ -33,8 +35,8 @@
         <h2>Ranking de estadios</h2>
       </div>
       <div class="controls">
-        <button class="toggle active" id="btn-cap" data-metric="capacity">Por capacidad</button>
-        <button class="toggle" id="btn-area" data-metric="areaM2">Por tamaño (m²)</button>
+        <label for="filter-confederation">Mostrar:</label>
+        <select id="filter-confederation" class="filter-select" title="Filtrar estadios por confederación"></select>
       </div>
       <div id="bar"></div>
     </div>
