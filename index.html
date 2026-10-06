@@ -32,11 +32,10 @@
 
     <div class="hero-content">
       <p class="hero-kicker">⚽ Visualización de estadios</p>
-      <h1 class="hero-title">Los templos del<br><span>fútbol mundial</span></h1>
+      <h1 class="hero-title">Los estadios más grandes del<br><span>fútbol mundial</span></h1>
       <p class="hero-sub">
-        ~400 de los estadios más grandes del planeta en un mapa sonoro.
-        Haz click en cualquiera para escuchar a su hinchada: mientras más
-        grande el estadio, más fuerte el rugido.
+        Explora cerca de 400 estadios en el mapa. Su tamaño representa el aforo:
+        compara recintos pequeños y enormes, y haz click para escuchar a sus hinchadas.
       </p>
       <button id="btn-explore" class="hero-btn" type="button">Explorar estadios ↓</button>
     </div>
@@ -49,8 +48,8 @@
   <div class="app" id="app-top">
   <header>
     <div class="header-text">
-      <h1>⚽ Estadios más importantes del mundo</h1>
-      <p>Haz click en un estadio del mapa para escuchar a su hinchada. El volumen del festejo crece con la capacidad del estadio.</p>
+      <h1>⚽ Estadios del mundo</h1>
+      <p>Explora sus aforos en el mapa y escucha el rugido de cada hinchada.</p>
     </div>
     <div class="header-actions">
       <!-- Botón para conectar el Arduino (servo). Oculto por ahora; ver README, sección "Integración con Arduino" para reactivarlo. -->
@@ -65,36 +64,67 @@
     <div id="map"></div>
     <!-- Fotos de estadio superpuestas al mapa (posicionadas por app.js) -->
     <div id="stadium-images"></div>
+    <div id="selected-stadium-marker" aria-hidden="true">
+      <span class="selected-marker-ring"></span>
+      <span class="selected-marker-label"></span>
+    </div>
+    <div id="stadium-tooltip" class="stadium-tooltip" role="tooltip" hidden>
+      <span class="stadium-tooltip-kicker">Ficha del estadio</span>
+      <strong id="stadium-tooltip-name"></strong>
+      <span id="stadium-tooltip-location" class="stadium-tooltip-location"></span>
+      <span id="stadium-tooltip-capacity" class="stadium-tooltip-capacity"></span>
+      <span id="stadium-tooltip-year" class="stadium-tooltip-year"></span>
+    </div>
 
-    <!-- Panel del ranking a la izquierda, altura completa, fondo transparente -->
+    <!-- Panel de exploración: filtros y ranking -->
     <div class="side-panel" id="ranking-panel">
+      <div class="panel-content">
       <div class="panel-head">
-        <h2>Ranking de estadios</h2>
+        <div>
+          <p class="panel-kicker">Explora los datos</p>
+          <h2>Estadios por aforo</h2>
+          <p class="panel-intro">Filtra el mapa y compara los recintos con más espectadores.</p>
+        </div>
+        <div class="panel-tools">
+          <button id="panel-drag" class="panel-drag" type="button" title="Arrastrar para mover el panel" aria-label="Mover panel de filtros">⠿</button>
+        </div>
       </div>
       <div class="controls">
+        <p class="section-label">Ajusta la selección</p>
         <div class="filter-row">
-          <label for="filter-confederation">Confederación</label>
+          <label for="filter-confederation">Región del fútbol</label>
           <select id="filter-confederation" class="filter-select" title="Filtrar por confederación"></select>
         </div>
         <div class="filter-row">
-          <label for="filter-country">País</label>
+          <label for="filter-country">País del estadio</label>
           <select id="filter-country" class="filter-select" title="Filtrar por país"></select>
         </div>
         <div class="filter-row filter-row--range">
-          <label for="filter-capacity">Capacidad mínima</label>
+          <label for="filter-capacity">Aforo mínimo</label>
           <input type="range" id="filter-capacity" class="filter-range" />
           <output id="filter-capacity-value" class="filter-range-value"></output>
+          <span class="filter-hint">Muestra estadios con al menos este aforo.</span>
         </div>
         <div class="filter-foot">
           <span id="filter-summary" class="filter-summary"></span>
           <button id="filter-reset" class="filter-reset" type="button">Limpiar filtros</button>
         </div>
       </div>
+      <div class="chart-heading">
+        <h3>Mayor capacidad</h3>
+        <p>Cada barra representa espectadores; se muestran hasta 8 resultados.</p>
+      </div>
       <div id="bar"></div>
+      </div>
+      <div class="panel-resize-edge panel-resize-edge--right" data-resize="right" role="separator" aria-label="Cambiar ancho del panel" tabindex="0"></div>
+      <div class="panel-resize-edge panel-resize-edge--left" data-resize="left" role="separator" aria-label="Cambiar ancho del panel" tabindex="0"></div>
+      <div class="panel-resize-edge panel-resize-edge--top" data-resize="top" role="separator" aria-label="Cambiar alto del panel" tabindex="0"></div>
+      <div class="panel-resize-edge panel-resize-edge--bottom" data-resize="bottom" role="separator" aria-label="Cambiar alto del panel" tabindex="0"></div>
     </div>
 
-    <!-- Estado del sonido, superpuesto abajo -->
-    <div id="now-playing">🔇 Ningún estadio sonando. Haz click en un punto del mapa.</div>
+    <!-- Estado del sonido, superpuesto sobre el mapa -->
+    <div class="map-guide">En el mapa, un marcador más grande representa mayor aforo. Selecciona uno para escuchar.</div>
+    <div id="now-playing">🔇 Selecciona un estadio para escuchar a su hinchada.</div>
 
     <!-- Estado de la conexión con el Arduino / servo. Oculto por ahora; ver README para reactivarlo junto con el botón. -->
     <!-- <div id="arduino-status">🔌 Arduino sin conectar.</div> -->

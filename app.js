@@ -74,7 +74,10 @@ const THEMES = {
     ocean: "#eef2f8",
     country: "#c3cad6",
     coast: "#c3cad6",
-    markerLine: "#ffffff"
+    markerLine: "#ffffff",
+    tooltipBg: "#ffffff",
+    tooltipBorder: "#d98200",
+    tooltipText: "#1a2230"
   },
   dark: {
     paper: "rgba(0,0,0,0)",
@@ -86,7 +89,10 @@ const THEMES = {
     ocean: "#0d1117",
     country: "#30363d",
     coast: "#30363d",
-    markerLine: "#0d1117"
+    markerLine: "#0d1117",
+    tooltipBg: "#161b22",
+    tooltipBorder: "#f2a900",
+    tooltipText: "#e6edf3"
   }
 };
 
@@ -220,6 +226,7 @@ async function playGoal(stadium) {
 //  MAPA — Plotly scattergeo
 // ============================================================
 let mapInitialized = false;
+let selectedMapStadium = null;
 
 // Con más estadios visibles que este umbral, mostramos marcadores nativos
 // (que Plotly reposiciona solo, sin coste por frame). Con pocos, mostramos
@@ -244,10 +251,17 @@ function drawMap() {
     lat: list.map(s => s.lat),
     lon: list.map(s => s.lon),
     text: list.map(s =>
-      `<b>${s.name}</b><br>${s.city}, ${s.country}` +
-      `<br>Capacidad: ${s.capacity.toLocaleString("es")}` +
-      (s.year ? `<br>Inaugurado: ${s.year}` : "")),
+      `<b>${s.name}</b><br>📍 ${s.city}, ${s.country}` +
+      `<br>👥 ${s.capacity.toLocaleString("es")} espectadores` +
+      (s.year ? `<br>Inaugurado en ${s.year}` : "")),
     hoverinfo: "text",
+    hoverlabel: {
+      bgcolor: p.tooltipBg,
+      bordercolor: p.tooltipBorder,
+      font: { family: "Segoe UI, system-ui, sans-serif", size: 13, color: p.tooltipText },
+      align: "left",
+      namelength: -1
+    },
     marker: {
       size: sizes,
       color: colors,
@@ -282,16 +296,35 @@ function drawMap() {
       } else {
         clearStadiumImages();                  // muchos: sin fotos, todo nativo
       }
+      scheduleSelectedMarker();
       if (!mapInitialized) {
+        gd.on("plotly_hover", ev => {
+          const pt = ev.points && ev.points[0];
+          const stadium = pt && mapList[pt.pointIndex];
+          if (stadium) clearSelectedMarkerIfSame(stadium);
+        });
         gd.on("plotly_click", ev => {
           const pt = ev.points[0];
-          if (pt && mapList[pt.pointIndex]) playGoal(mapList[pt.pointIndex]);
+          const stadium = pt && mapList[pt.pointIndex];
+          if (stadium) {
+            clearSelectedMarkerIfSame(stadium);
+            playGoal(stadium);
+          }
         });
         // Reposicionar las fotos en cada render, pero SOLO si hay fotos y
         // como mucho una vez por frame (rAF), para no congelar el zoom/pan.
-        gd.on("plotly_afterplot", schedulePositionImages);
-        gd.on("plotly_relayout", schedulePositionImages);
-        window.addEventListener("resize", schedulePositionImages);
+        gd.on("plotly_afterplot", () => {
+          schedulePositionImages();
+          scheduleSelectedMarker();
+        });
+        gd.on("plotly_relayout", () => {
+          schedulePositionImages();
+          scheduleSelectedMarker();
+        });
+        window.addEventListener("resize", () => {
+          schedulePositionImages();
+          scheduleSelectedMarker();
+        });
         mapInitialized = true;
       }
     });
@@ -311,6 +344,74 @@ let mapList = STADIUMS;   // lista de estadios actualmente dibujada en el mapa
 
 let mapGd = null;          // referencia al gráfico de Plotly
 let positionRAF = null;    // rAF pendiente para reposicionar fotos (throttle)
+let selectedMarkerRAF = null;
+
+function scheduleSelectedMarker() {
+  if (selectedMarkerRAF) return;
+  selectedMarkerRAF = requestAnimationFrame(() => {
+    selectedMarkerRAF = null;
+    positionSelectedMarker();
+  });
+}
+
+function positionSelectedMarker() {
+  const marker = document.getElementById("selected-stadium-marker");
+  const label = marker && marker.querySelector(".selected-marker-label");
+  if (!marker || !selectedMapStadium || !mapGd) {
+    if (marker) marker.style.display = "none";
+    return;
+  }
+  const index = mapList.indexOf(selectedMapStadium);
+  if (index < 0) { marker.style.display = "none"; return; }
+
+  // Usa una capa visible y estable como referencia: el resaltado puede estar
+  // oculto mientras termina el zoom y su bounding box entonces mide cero.
+  const positions = readPlottedPointPositions(mapGd, imgContainer());
+  const point = positions && positions[index];
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    marker.style.display = "none";
+    return;
+  }
+  marker.style.display = "block";
+  marker.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, -50%)`;
+  if (label) label.textContent = selectedMapStadium.name;
+}
+
+function clearSelectedMarkerIfSame(stadium) {
+  if (selectedMapStadium !== stadium) return;
+  selectedMapStadium = null;
+  const marker = document.getElementById("selected-stadium-marker");
+  if (marker) marker.style.display = "none";
+}
+
+function showStadiumTooltip(stadium, event) {
+  const tooltip = document.getElementById("stadium-tooltip");
+  if (!tooltip) return;
+  document.getElementById("stadium-tooltip-name").textContent = stadium.name;
+  document.getElementById("stadium-tooltip-location").textContent = `📍 ${stadium.city}, ${stadium.country}`;
+  document.getElementById("stadium-tooltip-capacity").textContent =
+    `👥 ${stadium.capacity.toLocaleString("es")} espectadores`;
+  const year = document.getElementById("stadium-tooltip-year");
+  year.textContent = stadium.year ? `Inaugurado en ${stadium.year}` : "";
+  year.hidden = !stadium.year;
+  tooltip.hidden = false;
+
+  const offset = 16;
+  const rect = tooltip.getBoundingClientRect();
+  const left = event.clientX + rect.width + offset < window.innerWidth
+    ? event.clientX + offset
+    : event.clientX - rect.width - offset;
+  const top = event.clientY + rect.height + offset < window.innerHeight
+    ? event.clientY + offset
+    : event.clientY - rect.height - offset;
+  tooltip.style.left = `${Math.max(8, left)}px`;
+  tooltip.style.top = `${Math.max(8, top)}px`;
+}
+
+function hideStadiumTooltip() {
+  const tooltip = document.getElementById("stadium-tooltip");
+  if (tooltip) tooltip.hidden = true;
+}
 
 function imgContainer() {
   return document.getElementById("stadium-images");
@@ -333,7 +434,7 @@ function buildStadiumImages(list) {
     el.src = STADIUM_IMG;
     el.className = "stadium-pin";
     el.alt = s.name;
-    el.title = `${s.name} — ${s.city}, ${s.country}`;
+    el.setAttribute("aria-label", `${s.name} — ${s.city}, ${s.country}`);
     el.loading = "lazy";
     // Tamaño fijo por estadio (no cambia en zoom/pan): evita recalcular estilo.
     const size = 26 + intensityOf(s) * 40;
@@ -341,7 +442,14 @@ function buildStadiumImages(list) {
     el.style.height = size + "px";
     el.style.zIndex = String(3 + Math.round(intensityOf(s) * 10));
     // Click en la foto = mismo efecto que click en el punto.
-    el.addEventListener("click", () => playGoal(s));
+    el.addEventListener("click", () => {
+      clearSelectedMarkerIfSame(s);
+      playGoal(s);
+    });
+    el.addEventListener("mouseenter", () => clearSelectedMarkerIfSame(s));
+    el.addEventListener("pointerenter", event => showStadiumTooltip(s, event));
+    el.addEventListener("pointermove", event => showStadiumTooltip(s, event));
+    el.addEventListener("pointerleave", hideStadiumTooltip);
     cont.appendChild(el);
     return el;
   });
@@ -458,8 +566,8 @@ function positionStadiumImages(gd) {
 // ============================================================
 //  GRÁFICO DE BARRAS — capacidad / área conmutable
 // ============================================================
-// Cuántas barras mostrar como máximo (el dataset tiene ~200 estadios).
-const BAR_TOP_N = 30;
+// Cuántas barras mostrar como máximo para mantener legible el ranking.
+const BAR_TOP_N = 8;
 
 function drawBar() {
   const p = palette();
@@ -470,6 +578,8 @@ function drawBar() {
     .slice(0, BAR_TOP_N);
   const values = sorted.map(s => s.capacity);
   const labels = sorted.map(s => s.name);
+  const barElement = document.getElementById("bar");
+  const labelMargin = Math.max(105, Math.min(210, Math.round((barElement?.clientWidth || 500) * 0.4)));
 
   const trace = {
     type: "bar",
@@ -489,7 +599,7 @@ function drawBar() {
     paper_bgcolor: p.paper,
     plot_bgcolor: p.plot,
     font: { color: p.text },
-    margin: { l: 210, r: 16, t: 6, b: 44 },
+    margin: { l: labelMargin, r: 16, t: 6, b: 44 },
     bargap: 0.18,
     xaxis: {
       title: { text: "Capacidad (espectadores)" },
@@ -510,6 +620,9 @@ function drawBar() {
       gd.on("plotly_click", ev => {
         const pt = ev.points[0];
         if (pt && pt.customdata) {
+          selectedMapStadium = pt.customdata;
+          const marker = document.getElementById("selected-stadium-marker");
+          if (marker) marker.style.display = "none";
           zoomToStadium(pt.customdata);   // acerca el mapa a ese estadio
           playGoal(pt.customdata);        // y reproduce su sonido
         }
@@ -531,7 +644,12 @@ function zoomToStadium(stadium) {
     "geo.center.lat": stadium.lat
   };
   // Intentamos animarlo; si la versión no anima layout.geo, caemos a relayout.
-  const done = () => schedulePositionImages();
+  const done = () => {
+    schedulePositionImages();
+    // Esperamos a que Plotly termine de actualizar el SVG del mapa antes de
+    // calcular la posición final del resaltado.
+    window.setTimeout(scheduleSelectedMarker, 100);
+  };
   try {
     Plotly.animate(mapGd, { layout: relayout }, {
       transition: { duration: 700, easing: "cubic-in-out" },
@@ -671,6 +789,114 @@ themeBtn.addEventListener("click", () => {
 // ---------- Botón "Ver mundo" (des-zoom) ----------
 const resetViewBtn = document.getElementById("btn-reset-view");
 if (resetViewBtn) resetViewBtn.addEventListener("click", resetMapView);
+
+// ---------- Panel movible: el usuario puede reubicarlo dentro del mapa ----------
+const rankingPanel = document.getElementById("ranking-panel");
+const panelDragHandle = document.getElementById("panel-drag");
+if (rankingPanel && panelDragHandle) {
+  panelDragHandle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const stage = rankingPanel.parentElement;
+    const panelRect = rankingPanel.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    const offsetX = event.clientX - panelRect.left;
+    const offsetY = event.clientY - panelRect.top;
+    rankingPanel.style.right = "auto";
+    rankingPanel.style.bottom = "auto";
+    rankingPanel.style.height = `${panelRect.height}px`;
+    rankingPanel.style.left = `${panelRect.left - stageRect.left}px`;
+    rankingPanel.style.top = `${panelRect.top - stageRect.top}px`;
+    panelDragHandle.setPointerCapture(event.pointerId);
+
+    const movePanel = (moveEvent) => {
+      const left = Math.max(0, Math.min(stage.clientWidth - rankingPanel.offsetWidth,
+        moveEvent.clientX - stageRect.left - offsetX));
+      const top = Math.max(0, Math.min(stage.clientHeight - rankingPanel.offsetHeight,
+        moveEvent.clientY - stageRect.top - offsetY));
+      rankingPanel.style.left = `${left}px`;
+      rankingPanel.style.top = `${top}px`;
+    };
+    const stopMoving = () => {
+      panelDragHandle.removeEventListener("pointermove", movePanel);
+      panelDragHandle.removeEventListener("pointerup", stopMoving);
+      panelDragHandle.removeEventListener("pointercancel", stopMoving);
+    };
+    panelDragHandle.addEventListener("pointermove", movePanel);
+    panelDragHandle.addEventListener("pointerup", stopMoving);
+    panelDragHandle.addEventListener("pointercancel", stopMoving);
+  });
+}
+
+// Arrastrar cualquiera de los bordes cambia directamente el ancho o el alto.
+if (rankingPanel) {
+  rankingPanel.querySelectorAll(".panel-resize-edge").forEach(handle => {
+    handle.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const stage = rankingPanel.parentElement;
+      const stageRect = stage.getBoundingClientRect();
+      const panelRect = rankingPanel.getBoundingClientRect();
+      const edge = handle.dataset.resize;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startLeft = panelRect.left - stageRect.left;
+      const startTop = panelRect.top - stageRect.top;
+      const startWidth = panelRect.width;
+      const startHeight = panelRect.height;
+
+      rankingPanel.style.right = "auto";
+      rankingPanel.style.bottom = "auto";
+      rankingPanel.style.left = `${startLeft}px`;
+      rankingPanel.style.top = `${startTop}px`;
+      rankingPanel.style.width = `${startWidth}px`;
+      rankingPanel.style.height = `${startHeight}px`;
+      handle.setPointerCapture(event.pointerId);
+
+      const resizePanel = moveEvent => {
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (edge === "right") {
+          rankingPanel.style.width = `${Math.max(350, Math.min(stage.clientWidth - startLeft, startWidth + dx))}px`;
+        } else if (edge === "left") {
+          const width = Math.max(350, Math.min(startLeft + startWidth, startWidth - dx));
+          rankingPanel.style.width = `${width}px`;
+          rankingPanel.style.left = `${startLeft + startWidth - width}px`;
+        } else if (edge === "bottom") {
+          rankingPanel.style.height = `${Math.max(360, Math.min(stage.clientHeight - startTop, startHeight + dy))}px`;
+        } else if (edge === "top") {
+          const height = Math.max(360, Math.min(startTop + startHeight, startHeight - dy));
+          rankingPanel.style.height = `${height}px`;
+          rankingPanel.style.top = `${startTop + startHeight - height}px`;
+        }
+      };
+      const stopResize = () => {
+        handle.removeEventListener("pointermove", resizePanel);
+        handle.removeEventListener("pointerup", stopResize);
+        handle.removeEventListener("pointercancel", stopResize);
+      };
+      handle.addEventListener("pointermove", resizePanel);
+      handle.addEventListener("pointerup", stopResize);
+      handle.addEventListener("pointercancel", stopResize);
+    });
+  });
+}
+
+// Redibuja Plotly al variar el espacio disponible en el ranking.
+const barResizeTarget = document.getElementById("bar");
+if (barResizeTarget && "ResizeObserver" in window) {
+  let resizeFrame = null;
+  const barResizeObserver = new ResizeObserver(() => {
+    if (resizeFrame) cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = null;
+      if (!barResizeTarget.data || !window.Plotly) return;
+      Plotly.Plots.resize(barResizeTarget);
+      const labelMargin = Math.max(105, Math.min(210, Math.round(barResizeTarget.clientWidth * 0.4)));
+      Plotly.relayout(barResizeTarget, { "margin.l": labelMargin });
+    });
+  });
+  barResizeObserver.observe(barResizeTarget);
+}
 
 // ---------- Portada: "Explorar estadios" hace scroll hasta el mapa ----------
 function resizeMapSoon() {
