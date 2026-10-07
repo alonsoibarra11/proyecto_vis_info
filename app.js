@@ -117,6 +117,7 @@ let audioLoading = null;                    // promesa de carga del buffer
 let player, playerGain, masterGain, meter;  // reproductor + salida + medidor
 let stopTimer = null;
 let levelRAF = null;                        // requestAnimationFrame del medidor
+let goalSequence = 0;                       // invalida secuencias interrumpidas
 
 async function initAudio() {
   if (audioReady) return;
@@ -175,56 +176,356 @@ function stopAllSound(fast = true) {
   emitBus("goal:stop", {});
 }
 
-async function playGoal(stadium) {
+async function playGoal(stadium, zoom = false) {
+  const sequence = ++goalSequence;
+  cancelMatchIntro();
+  cancelPeopleAnimation();
   await initAudio();
+  if (sequence !== goalSequence) return;
   stopAllSound(true);
+
+  // Si el mapa está oculto, lo revelamos primero y esperamos a que
+  // Plotly esté listo (necesitamos las coordenadas en pantalla).
+  await showMap();
+  if (sequence !== goalSequence) return;
+
+  // Las barras también pueden solicitar acercamiento. Se hace después de
+  // revelar el mapa, porque la redibujada de Plotly restablece la proyección.
+  if (zoom) {
+    await zoomToStadium(stadium);
+    if (sequence !== goalSequence) return;
+  }
 
   const intensity = intensityOf(stadium); // 0..1
 
-  // --- Volumen mucho más contrastado según capacidad ---
-  // El oído percibe el volumen en DECIBELES, no en ganancia lineal, así que
-  // mapeamos la intensidad a un rango amplio de dB: estadio chico ≈ -20 dB
-  // (claramente más bajo) y estadio enorme = 0 dB (a tope). Una gamma 0.8
-  // reparte bien el contraste entre la mayoría de estadios, que se concentran
-  // en el tramo bajo-medio de capacidad.
-  const contrast = Math.pow(intensity, 0.8); // 0..1
-  const MIN_DB = -20, MAX_DB = 0;
-  const db = MIN_DB + contrast * (MAX_DB - MIN_DB);
-  const vol = Tone.dbToGain(db); // dB -> ganancia lineal para el Gain node
+  // Actualiza el texto de "sonando"
+  const npEl = document.getElementById("now-playing");
+  if (npEl) npEl.textContent =
+    `⚽ ${stadium.name} — ${stadium.city} · Aforo ${stadium.capacity.toLocaleString("es")}`;
+
+  // Anuncia el partido sobre el estadio antes de que empiece a llegar la gente.
+  await showMatchIntro(stadium);
+  if (sequence !== goalSequence) return;
+
+  // Lanza la animación de personas + pitidos, luego el crowd-cheer
+  await animatePeople(stadium, intensity);
+  if (sequence !== goalSequence) return;
+  playCrowdCheer(stadium, intensity);
+}
+
+// ============================================================
+//  SONIDO DEL CROWD-CHEER (separado de la animación)
+// ============================================================
+function playCrowdCheer(stadium, intensity) {
+  if (!audioReady) return;
+  stopAllSound(false);
+
+  const contrast = Math.pow(intensity, 0.8);
+  const db = -20 + contrast * 20;
+  const vol = Tone.dbToGain(db);
 
   const now = Tone.now();
-
-  // Reinicia el reproductor desde el principio y sube el volumen.
-  try { if (player.state === "started") player.stop(now); } catch (_) { /* noop */ }
+  try { if (player.state === "started") player.stop(now); } catch (_) {}
   player.start(now + 0.02);
 
   playerGain.gain.cancelScheduledValues(now);
   playerGain.gain.setValueAtTime(0.0001, now);
   playerGain.gain.linearRampToValueAtTime(vol, now + 0.12);
 
-  // Duración: el clip completo, o un máximo que crece con la intensidad.
   const clipMs = (player.buffer && player.buffer.duration)
-    ? player.buffer.duration * 1000
-    : 4000;
-  const maxMs = 3500 + Math.round(intensity * 2000); // 3.5s..5.5s
+    ? player.buffer.duration * 1000 : 4000;
+  const maxMs = 3500 + Math.round(intensity * 2000);
   const durationMs = Math.min(clipMs, maxMs);
 
-  // Nivel de audio en vivo → bus → Arduino.
   startLevelPump();
-
-  // Aviso a quien fisicalice (Arduino/servo): empieza el festejo.
   emitBus("goal:start", { stadium, intensity, durationMs });
-
   stopTimer = setTimeout(() => stopAllSound(false), durationMs);
 
-  document.getElementById("now-playing").textContent =
-    `⚽ ¡GOOOOL! en ${stadium.name} — ${stadium.city}, ${stadium.country} · ` +
-    `Aforo ${stadium.capacity.toLocaleString("es")} · Intensidad ${(intensity * 100).toFixed(0)}%`;
+  // Hace crecer y temblar el marcador del estadio seleccionado
+  triggerMarkerShake();
 }
 
 // ============================================================
-//  MAPA — Plotly scattergeo
+//  ANIMACIÓN DE PERSONAS CONVERGIENDO AL ESTADIO
 // ============================================================
+let peopleRAF = null;        // handle del loop de animación activo
+let peopleCanvas = null;     // <canvas> superpuesto al stage
+let peopleCancel = null;
+let peopleTimeout = null;
+let matchIntroEl = null;
+let matchIntroTimer = null;
+let matchIntroResolve = null;
+
+// Número de personas según capacidad: 12 (mínimo) a 160 (máximo)
+function personCount(intensity) {
+  return Math.round(12 + intensity * 148);
+}
+
+function cancelPeopleAnimation() {
+  if (peopleRAF) { cancelAnimationFrame(peopleRAF); peopleRAF = null; }
+  if (peopleCanvas) { peopleCanvas.remove(); peopleCanvas = null; }
+  if (peopleTimeout) { clearTimeout(peopleTimeout); peopleTimeout = null; }
+  if (peopleCancel) {
+    const cancel = peopleCancel;
+    peopleCancel = null;
+    cancel();
+  }
+}
+
+// Sintetiza un pitido breve con Tone.js cuando una persona llega al estadio.
+// El tono sube levemente con cada persona para dar sensación de acumulación.
+let beepSynth = null;
+function beep(idx, total) {
+  if (!audioReady) return;
+  try {
+    if (!beepSynth) {
+      beepSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.05 }
+      }).connect(masterGain);
+      beepSynth.volume.value = -14;
+    }
+    // Frecuencia: escala de 800 Hz a 1400 Hz a medida que llegan personas
+    const freq = 800 + (idx / Math.max(1, total - 1)) * 600;
+    beepSynth.triggerAttackRelease(freq, 0.045);
+  } catch (_) {}
+}
+
+async function animatePeople(stadium, intensity) {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (peopleRAF) { cancelAnimationFrame(peopleRAF); peopleRAF = null; }
+      if (peopleTimeout) { clearTimeout(peopleTimeout); peopleTimeout = null; }
+      if (peopleCanvas) { peopleCanvas.remove(); peopleCanvas = null; }
+      if (peopleCancel === finish) peopleCancel = null;
+      resolve();
+    };
+    peopleCancel = finish;
+    const stage = document.getElementById("stage");
+    if (!stage || !mapGd) { finish(); return; }
+
+    // Obtener posición en pantalla del estadio en el mapa
+    const targetPx = getStadiumPixel(stadium);
+    if (!targetPx) { finish(); return; }
+
+    const stageRect = stage.getBoundingClientRect();
+    // Posición del estadio relativa al stage (para el canvas)
+    const targetX = targetPx.x - stageRect.left;
+    const targetY = targetPx.y - stageRect.top;
+
+    const N = personCount(intensity);
+    // Intervalo entre llegadas (ms): más corto = más amontonados
+    // Mantiene una secuencia de unos 2.6–3.8 s: pequeña = pausada,
+    // grande = muchos pitidos muy juntos.
+    const arrivalWindow = 2600 + intensity * 1200;
+    const arrivalInterval = Math.round(arrivalWindow / Math.max(1, N - 1));
+
+    // Crear canvas superpuesto
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = `
+      position:absolute; inset:0; width:100%; height:100%;
+      pointer-events:none; z-index:4;
+    `;
+    canvas.width = stageRect.width;
+    canvas.height = stageRect.height;
+    stage.appendChild(canvas);
+    peopleCanvas = canvas;
+    const ctx = canvas.getContext("2d");
+
+    // Genera N personas con posición aleatoria de inicio
+    const people = Array.from({ length: N }, (_, i) => {
+      return {
+        x: Math.random() * stageRect.width,
+        y: Math.random() * stageRect.height,
+        arrived: false,
+        arriveAt: i * arrivalInterval,    // tiempo (ms) en que llega este punto
+        startedAt: null,
+        duration: 780 + Math.random() * 30,   // duración del trayecto (ms)
+      };
+    });
+
+    let arrivedCount = 0;
+    const startTime = performance.now();
+
+    const loop = (now) => {
+      const elapsed = now - startTime;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      let allDone = true;
+
+      people.forEach((p, i) => {
+        if (p.arrived) return;
+
+        if (elapsed < p.arriveAt) {
+          // Todavía no ha empezado a moverse, dibújalo en origen
+          allDone = false;
+          drawPerson(ctx, p.x, p.y, 0);
+          return;
+        }
+
+        if (!p.startedAt) p.startedAt = now;
+        const t = Math.min(1, (now - p.startedAt) / p.duration);
+        const eased = easeInQuad(t);
+
+        const cx = p.x + (targetX - p.x) * eased;
+        const cy = p.y + (targetY - p.y) * eased;
+
+        if (t < 1) {
+          allDone = false;
+          drawPerson(ctx, cx, cy, t);
+        } else {
+          // Llegó — emite pitido escalonado
+          if (!p.arrived) {
+            p.arrived = true;
+            arrivedCount++;
+            beep(arrivedCount - 1, N);
+          }
+        }
+      });
+
+      if (allDone) {
+        // Pequeño flash en el destino al terminar
+        ctx.beginPath();
+        ctx.arc(targetX, targetY, 28, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(242, 169, 0, 0.45)";
+        ctx.fill();
+        peopleTimeout = setTimeout(finish, 180);
+        return;
+      }
+
+      peopleRAF = requestAnimationFrame(loop);
+    };
+
+    peopleRAF = requestAnimationFrame(loop);
+  });
+}
+
+// Dibuja un punto "persona" con tamaño que crece al acercarse (t = 0..1)
+function drawPerson(ctx, x, y, t) {
+  const r = 3 + t * 3;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(242, 169, 0, ${0.5 + t * 0.5})`;
+  ctx.fill();
+  // Estela
+  if (t > 0.1) {
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(242, 169, 0, ${0.12 + t * 0.1})`;
+    ctx.fill();
+  }
+}
+
+function easeInQuad(t) { return t * t; }
+
+// Obtiene la posición en pantalla (absoluta) del estadio en el mapa actual.
+function getStadiumPixel(stadium) {
+  if (!mapGd) return null;
+  // Intentamos leer desde los puntos del SVG (más preciso)
+  const pts = mapGd.querySelectorAll(".scatterlayer .trace .point");
+  if (pts && pts.length > 0) {
+    const idx = mapList.indexOf(stadium);
+    if (idx !== -1) {
+      const node = pts[idx];
+      if (node) {
+        const r = node.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }
+    }
+  }
+  // Fallback: proyección geo
+  const project = getGeoProjector(mapGd);
+  if (!project) return null;
+  const px = project(stadium.lon, stadium.lat);
+  if (!px || !isFinite(px.x)) return null;
+  const mapRect = mapGd.getBoundingClientRect();
+  return { x: mapRect.left + px.x, y: mapRect.top + px.y };
+}
+
+function cancelMatchIntro() {
+  if (matchIntroTimer !== null) {
+    clearTimeout(matchIntroTimer);
+    matchIntroTimer = null;
+  }
+  if (matchIntroEl) {
+    matchIntroEl.remove();
+    matchIntroEl = null;
+  }
+  if (matchIntroResolve) {
+    const resolve = matchIntroResolve;
+    matchIntroResolve = null;
+    resolve();
+  }
+}
+
+function showMatchIntro(stadium) {
+  cancelMatchIntro();
+  const stage = document.getElementById("stage");
+  const targetPx = getStadiumPixel(stadium);
+  if (!stage || !targetPx) return Promise.resolve();
+
+  const stageRect = stage.getBoundingClientRect();
+  const x = targetPx.x - stageRect.left;
+  const y = targetPx.y - stageRect.top;
+  const announcement = document.createElement("div");
+  announcement.className = "match-announcement";
+  announcement.setAttribute("role", "status");
+  announcement.textContent = "El partido está a punto de empezar!";
+  announcement.style.left = `${x}px`;
+  announcement.style.top = `${y}px`;
+  stage.appendChild(announcement);
+
+  const bubbleRect = announcement.getBoundingClientRect();
+  const halfWidth = bubbleRect.width / 2;
+  announcement.style.left = `${Math.max(halfWidth + 12, Math.min(stageRect.width - halfWidth - 12, x))}px`;
+  announcement.dataset.placement = y < bubbleRect.height + 34 ? "below" : "above";
+  matchIntroEl = announcement;
+
+  return new Promise(resolve => {
+    matchIntroResolve = resolve;
+    matchIntroTimer = setTimeout(cancelMatchIntro, 1450);
+  });
+}
+
+// Hace crecer y temblar el marcador del estadio seleccionado al sonar el crowd-cheer
+function triggerMarkerShake() {
+  const marker = document.getElementById("selected-stadium-marker");
+  if (!marker || marker.style.display === "none") return;
+  marker.classList.remove("marker-shake");
+  // Forzamos reflow para que la animación se reinicie
+  void marker.offsetWidth;
+  marker.classList.add("marker-shake");
+  setTimeout(() => marker.classList.remove("marker-shake"), 1200);
+}
+
+// ============================================================
+//  LAYOUT: mapa oculto / visible
+//  Vista inicial = solo ranking a pantalla completa.
+//  Al revelar el mapa, el panel vuelve a flotar sobre él.
+// ============================================================
+let mapVisible = false;
+let mapReadyPromise = Promise.resolve();
+
+function showMap() {
+  if (mapVisible) return mapReadyPromise;
+  mapVisible = true;
+  const stage = document.getElementById("stage");
+  if (stage) stage.classList.remove("map-hidden");
+  // Plotly necesita recalcular su tamaño ahora que el contenedor es visible.
+  mapReadyPromise = new Promise(resolve => setTimeout(() => {
+    resizeMapSoon();
+    Promise.all([
+      drawMap(),  // redibuja el mapa con dimensiones reales
+      drawBar()   // redibuja el bar para que encaje en el panel flotante
+    ]).then(resolve);
+  }, 50));
+  return mapReadyPromise;
+}
+
+
 let mapInitialized = false;
 let selectedMapStadium = null;
 
@@ -286,7 +587,7 @@ function drawMap() {
     }
   };
 
-  Plotly.react("map", [trace], layout, { responsive: true, displayModeBar: false })
+  return Plotly.react("map", [trace], layout, { responsive: true, displayModeBar: false })
     .then(gd => {
       mapGd = gd;
       if (showPhotos) {
@@ -308,6 +609,8 @@ function drawMap() {
           const stadium = pt && mapList[pt.pointIndex];
           if (stadium) {
             clearSelectedMarkerIfSame(stadium);
+            selectedMapStadium = stadium;
+            scheduleSelectedMarker();
             playGoal(stadium);
           }
         });
@@ -444,6 +747,8 @@ function buildStadiumImages(list) {
     // Click en la foto = mismo efecto que click en el punto.
     el.addEventListener("click", () => {
       clearSelectedMarkerIfSame(s);
+      selectedMapStadium = s;
+      scheduleSelectedMarker();
       playGoal(s);
     });
     el.addEventListener("mouseenter", () => clearSelectedMarkerIfSame(s));
@@ -579,42 +884,57 @@ function drawBar() {
   const values = sorted.map(s => s.capacity);
   const labels = sorted.map(s => s.name);
   const barElement = document.getElementById("bar");
-  const labelMargin = Math.max(105, Math.min(210, Math.round((barElement?.clientWidth || 500) * 0.4)));
+  const overview = !mapVisible;
+  const barWidth = barElement?.clientWidth || 500;
+  const labelMargin = overview
+    ? Math.max(220, Math.min(360, Math.round(barWidth * 0.23)))
+    : Math.max(105, Math.min(210, Math.round(barWidth * 0.4)));
 
   const trace = {
     type: "bar",
     orientation: "h",
     x: values,
     y: labels,
+    text: overview ? values.map(value => value.toLocaleString("es")) : undefined,
+    textposition: overview ? "outside" : "none",
+    textfont: { size: overview ? 15 : 10, color: p.text },
+    cliponaxis: !overview,
     customdata: sorted,
     marker: {
       color: values,
-      colorscale: [[0, "#2b6cb0"], [1, "#f2a900"]],
+      colorscale: overview
+        ? [[0, "#3976b8"], [0.58, "#5489b4"], [1, "#e58b00"]]
+        : [[0, "#2b6cb0"], [1, "#f2a900"]],
       line: { color: p.markerLine, width: 0.5 }
     },
-    hovertemplate: "<b>%{y}</b><br>Capacidad: %{x:,} espectadores<extra></extra>"
+    hovertemplate: "<b>%{y}</b><br>Capacidad: %{x:,.0f} espectadores<extra></extra>"
   };
 
   const layout = {
     paper_bgcolor: p.paper,
     plot_bgcolor: p.plot,
     font: { color: p.text },
-    margin: { l: labelMargin, r: 16, t: 6, b: 44 },
-    bargap: 0.18,
+    separators: overview ? ",." : undefined,
+    height: overview ? Math.max(450, Math.min(600, Math.round(window.innerHeight * 0.58))) : undefined,
+    margin: { l: labelMargin, r: overview ? 86 : 16, t: overview ? 16 : 6, b: overview ? 58 : 44 },
+    bargap: overview ? 0.34 : 0.18,
     xaxis: {
-      title: { text: "Capacidad (espectadores)" },
-      gridcolor: p.grid, zerolinecolor: p.grid, tickfont: { size: 10 },
-      showline: false
+      title: { text: overview ? "Aforo (personas)" : "Capacidad (espectadores)", font: { size: overview ? 13 : 11, color: p.muted }, standoff: 12 },
+      gridcolor: p.grid, zerolinecolor: p.grid,
+      tickfont: { size: overview ? 12 : 10, color: p.muted },
+      tickformat: overview ? ",.0f" : undefined,
+      range: overview && values.length ? [0, Math.max(...values) * 1.16] : undefined,
+      showline: false,
+      fixedrange: overview
     },
     yaxis: {
       autorange: "reversed",
-      tickfont: { size: 10, color: p.text },
+      tickfont: { size: overview ? 15 : 10, color: p.text },
       automargin: true
-    },
-    height: undefined
+    }
   };
 
-  Plotly.react("bar", [trace], layout, { responsive: true, displayModeBar: false })
+  return Plotly.react("bar", [trace], layout, { responsive: true, displayModeBar: false })
     .then(gd => {
       gd.removeAllListeners && gd.removeAllListeners("plotly_click");
       gd.on("plotly_click", ev => {
@@ -623,8 +943,7 @@ function drawBar() {
           selectedMapStadium = pt.customdata;
           const marker = document.getElementById("selected-stadium-marker");
           if (marker) marker.style.display = "none";
-          zoomToStadium(pt.customdata);   // acerca el mapa a ese estadio
-          playGoal(pt.customdata);        // y reproduce su sonido
+          playGoal(pt.customdata, true);  // revela, acerca el mapa y reproduce
         }
       });
     });
@@ -633,7 +952,7 @@ function drawBar() {
 // Centra y acerca el mapa geo al estadio indicado (animado).
 const GEO_ZOOM_SCALE = 6;   // nivel de acercamiento (1 = mundo completo)
 function zoomToStadium(stadium) {
-  if (!mapGd || !stadium) return;
+  if (!mapGd || !stadium) return Promise.resolve();
   // En projection "natural earth", rotation.lon/lat centra el mapa y
   // projection.scale hace el zoom. center.lon/lat cubre el caso scoped.
   const relayout = {
@@ -650,13 +969,14 @@ function zoomToStadium(stadium) {
     // calcular la posición final del resaltado.
     window.setTimeout(scheduleSelectedMarker, 100);
   };
+  const fallback = () => Plotly.relayout(mapGd, relayout).then(done);
   try {
-    Plotly.animate(mapGd, { layout: relayout }, {
+    return Plotly.animate(mapGd, { layout: relayout }, {
       transition: { duration: 700, easing: "cubic-in-out" },
       frame: { duration: 700, redraw: true }
-    }).then(done, () => Plotly.relayout(mapGd, relayout).then(done));
+    }).then(done, fallback);
   } catch (_) {
-    Plotly.relayout(mapGd, relayout).then(done);
+    return fallback();
   }
 }
 
@@ -796,6 +1116,7 @@ const panelDragHandle = document.getElementById("panel-drag");
 if (rankingPanel && panelDragHandle) {
   panelDragHandle.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    if (!mapVisible) return;  // no arrastrar en modo mapa-oculto
     const stage = rankingPanel.parentElement;
     const panelRect = rankingPanel.getBoundingClientRect();
     const stageRect = stage.getBoundingClientRect();
@@ -832,6 +1153,7 @@ if (rankingPanel) {
   rankingPanel.querySelectorAll(".panel-resize-edge").forEach(handle => {
     handle.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
+      if (!mapVisible) return;  // no redimensionar en modo mapa-oculto
       event.preventDefault();
       const stage = rankingPanel.parentElement;
       const stageRect = stage.getBoundingClientRect();
@@ -891,14 +1213,21 @@ if (barResizeTarget && "ResizeObserver" in window) {
       resizeFrame = null;
       if (!barResizeTarget.data || !window.Plotly) return;
       Plotly.Plots.resize(barResizeTarget);
-      const labelMargin = Math.max(105, Math.min(210, Math.round(barResizeTarget.clientWidth * 0.4)));
+      const overview = !mapVisible;
+      const labelMargin = overview
+        ? Math.max(220, Math.min(360, Math.round(barResizeTarget.clientWidth * 0.23)))
+        : Math.max(105, Math.min(210, Math.round(barResizeTarget.clientWidth * 0.4)));
       Plotly.relayout(barResizeTarget, { "margin.l": labelMargin });
     });
   });
   barResizeObserver.observe(barResizeTarget);
 }
 
-// ---------- Portada: "Explorar estadios" hace scroll hasta el mapa ----------
+// ---------- Botón "Explorar en el mapa" (revela el mapa) ----------
+const showMapBtn = document.getElementById("btn-show-map");
+if (showMapBtn) showMapBtn.addEventListener("click", showMap);
+
+// ---------- Portada: "Averígualo aquí!" hace scroll hasta el mapa ----------
 function resizeMapSoon() {
   const gd = document.getElementById("map");
   if (gd && window.Plotly) {

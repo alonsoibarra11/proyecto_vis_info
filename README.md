@@ -37,6 +37,7 @@ Observa la página en el siguiente link: https://alonsoibarra11.github.io/proyec
 - `arduino.js` — puente con el Arduino/servo vía Web Serial (fisicalización).
 - `server.js` — servidor estático mínimo para previsualizar.
 - `scripts/fetch_stadiums.mjs` — script que baja los datos de Wikidata y regenera `data.js`.
+- `docs/V1_R1.md`, `docs/V2_R2.md` y `docs/V3_R3.md` — registro del proceso de diseño y las revisiones.
 - `assets/estadio.png` — imagen (sin fondo) usada como marcador de cada estadio en el mapa.
 - `assets/crowd-cheer.mp3` — grito de multitud que suena al hacer click.
 
@@ -115,11 +116,17 @@ cp .env.example .env
 El archivo `.env` está ignorado por Git y no debe subirse al repositorio.
 
 ## Uso
-1. Click en la foto de un estadio del mapa → suena el grito de multitud.
-2. Las fotos más grandes = estadios con más capacidad = sonido más fuerte.
-3. El panel de filtros (confederación, país, capacidad mínima) acota qué
+1. La visualización comienza con el ranking y los filtros. Pulsa **"🗺️ Explorar
+   en el mapa"** para mostrar el mapa junto al panel.
+2. Seleccionar un estadio inicia una secuencia de puntos que convergen hacia él,
+   con un pitido por llegada; al final suena el crowd-cheer. En el ranking, la
+   selección también muestra y acerca el mapa al estadio.
+3. La cantidad de puntos, el ritmo de llegada y el volumen del crowd-cheer
+   aumentan con la capacidad del estadio.
+4. El panel de filtros (confederación, país, capacidad mínima) acota qué
    estadios se ven en el mapa y en el ranking. "Limpiar filtros" los reinicia.
-4. Click en una barra también reproduce el sonido del estadio.
+5. Las fotos del mapa escalan con la capacidad. El marcador seleccionado crece
+   y tiembla brevemente cuando comienza el crowd-cheer.
 
 ## Tema claro / oscuro
 La página abre en **modo claro** por defecto. El botón superior derecho

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Estadios del Mundo · Mapa sonoro</title>
-  <link rel="stylesheet" href="styles.css?v=2" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <!-- Plotly.js -->
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
   <!-- Tone.js -->
@@ -32,12 +32,8 @@
 
     <div class="hero-content">
       <p class="hero-kicker">⚽ Visualización de estadios</p>
-      <h1 class="hero-title">Los estadios más grandes del<br><span>fútbol mundial</span></h1>
-      <p class="hero-sub">
-        Explora cerca de 400 estadios en el mapa. Su tamaño representa el aforo:
-        compara recintos pequeños y enormes, y haz click para escuchar a sus hinchadas.
-      </p>
-      <button id="btn-explore" class="hero-btn" type="button">Explorar estadios ↓</button>
+      <h1 class="hero-title">¿Alguna vez te has preguntado cuáles son los estadios con mayor capacidad en el mundo?</h1>
+      <button id="btn-explore" class="hero-btn" type="button">¡Averígualo aquí!</button>
     </div>
 
     <button class="hero-scroll" id="hero-scroll" type="button" aria-label="Bajar al mapa">
@@ -60,7 +56,7 @@
   </header>
 
   <!-- Componente único: el mapa ocupa todo y el ranking va fijo a la izquierda -->
-  <div class="stage">
+  <div class="stage map-hidden" id="stage">
     <div id="map"></div>
     <!-- Fotos de estadio superpuestas al mapa (posicionadas por app.js) -->
     <div id="stadium-images"></div>
@@ -92,7 +88,7 @@
       <div class="controls">
         <p class="section-label">Ajusta la selección</p>
         <div class="filter-row">
-          <label for="filter-confederation">Región del fútbol</label>
+          <label for="filter-confederation">Confederación</label>
           <select id="filter-confederation" class="filter-select" title="Filtrar por confederación"></select>
         </div>
         <div class="filter-row">
@@ -111,10 +107,11 @@
         </div>
       </div>
       <div class="chart-heading">
-        <h3>Mayor capacidad</h3>
-        <p>Cada barra representa espectadores; se muestran hasta 8 resultados.</p>
+        <h3>Top 8 por aforo</h3>
+        <p>Selecciona una barra para escuchar y ubicar el estadio.</p>
       </div>
       <div id="bar"></div>
+      <button id="btn-show-map" class="btn-show-map" type="button">🗺️ Explorar en el mapa</button>
       </div>
       <div class="panel-resize-edge panel-resize-edge--right" data-resize="right" role="separator" aria-label="Cambiar ancho del panel" tabindex="0"></div>
       <div class="panel-resize-edge panel-resize-edge--left" data-resize="left" role="separator" aria-label="Cambiar ancho del panel" tabindex="0"></div>
@@ -132,7 +129,7 @@
   </div><!-- /.app -->
 
   <script src="data.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=6"></script>
   <script src="arduino.js"></script>
 </body>
 </html>
