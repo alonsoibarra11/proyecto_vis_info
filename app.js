@@ -201,7 +201,7 @@ async function playGoal(stadium, zoom = false) {
   // Actualiza el texto de "sonando"
   const npEl = document.getElementById("now-playing");
   if (npEl) npEl.textContent =
-    `⚽ ${stadium.name} — ${stadium.city} · Aforo ${stadium.capacity.toLocaleString("es")}`;
+    `⚽ ${stadium.name} · ${stadium.city} · Capacidad: ${stadium.capacity.toLocaleString("es")} personas`;
 
   // Anuncia el partido sobre el estadio antes de que empiece a llegar la gente.
   await showMatchIntro(stadium);
@@ -553,7 +553,7 @@ function drawMap() {
     lon: list.map(s => s.lon),
     text: list.map(s =>
       `<b>${s.name}</b><br>📍 ${s.city}, ${s.country}` +
-      `<br>👥 ${s.capacity.toLocaleString("es")} espectadores` +
+      `<br>👥 Capacidad: ${s.capacity.toLocaleString("es")} personas` +
       (s.year ? `<br>Inaugurado en ${s.year}` : "")),
     hoverinfo: "text",
     hoverlabel: {
@@ -693,7 +693,7 @@ function showStadiumTooltip(stadium, event) {
   document.getElementById("stadium-tooltip-name").textContent = stadium.name;
   document.getElementById("stadium-tooltip-location").textContent = `📍 ${stadium.city}, ${stadium.country}`;
   document.getElementById("stadium-tooltip-capacity").textContent =
-    `👥 ${stadium.capacity.toLocaleString("es")} espectadores`;
+    `👥 Capacidad: ${stadium.capacity.toLocaleString("es")} personas`;
   const year = document.getElementById("stadium-tooltip-year");
   year.textContent = stadium.year ? `Inaugurado en ${stadium.year}` : "";
   year.hidden = !stadium.year;
@@ -907,7 +907,7 @@ function drawBar() {
         : [[0, "#2b6cb0"], [1, "#f2a900"]],
       line: { color: p.markerLine, width: 0.5 }
     },
-    hovertemplate: "<b>%{y}</b><br>Capacidad: %{x:,.0f} espectadores<extra></extra>"
+    hovertemplate: "<b>%{y}</b><br>Capacidad: %{x:,.0f} personas<extra></extra>"
   };
 
   const layout = {
@@ -919,7 +919,7 @@ function drawBar() {
     margin: { l: labelMargin, r: overview ? 86 : 16, t: overview ? 16 : 6, b: overview ? 58 : 44 },
     bargap: overview ? 0.34 : 0.18,
     xaxis: {
-      title: { text: overview ? "Aforo (personas)" : "Capacidad (espectadores)", font: { size: overview ? 13 : 11, color: p.muted }, standoff: 12 },
+      title: { text: "Capacidad máxima (personas)", font: { size: overview ? 13 : 11, color: p.muted }, standoff: 12 },
       gridcolor: p.grid, zerolinecolor: p.grid,
       tickfont: { size: overview ? 12 : 10, color: p.muted },
       tickformat: overview ? ",.0f" : undefined,
@@ -1061,7 +1061,7 @@ function buildFilter() {
     capRange.max = String(Math.ceil(CAP_MAX / 1000) * 1000);
     capRange.step = "1000";
     capRange.value = String(filters.minCapacity);
-    const fmt = (v) => Number(v).toLocaleString("es") + " espectadores";
+    const fmt = (v) => Number(v).toLocaleString("es") + " personas";
     if (capOut) capOut.textContent = fmt(capRange.value);
     // input = actualiza etiqueta en vivo; change = redibuja (más barato).
     capRange.addEventListener("input", () => {
@@ -1083,7 +1083,7 @@ function buildFilter() {
       if (confSel) confSel.value = "Todas";
       if (countrySel) countrySel.value = "Todos";
       if (capRange) capRange.value = String(CAP_MIN);
-      if (capOut) capOut.textContent = Number(CAP_MIN).toLocaleString("es") + " espectadores";
+      if (capOut) capOut.textContent = Number(CAP_MIN).toLocaleString("es") + " personas";
       applyFilters();
     });
   }
@@ -1227,7 +1227,7 @@ if (barResizeTarget && "ResizeObserver" in window) {
 const showMapBtn = document.getElementById("btn-show-map");
 if (showMapBtn) showMapBtn.addEventListener("click", showMap);
 
-// ---------- Portada: "Averígualo aquí!" hace scroll hasta el mapa ----------
+// ---------- Portada: "Explorar estadios" hace scroll hasta el gráfico ----------
 function resizeMapSoon() {
   const gd = document.getElementById("map");
   if (gd && window.Plotly) {

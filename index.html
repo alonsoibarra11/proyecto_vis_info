@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Estadios del Mundo · Mapa sonoro</title>
+  <title>Estadios con mayor capacidad del mundo</title>
   <link rel="stylesheet" href="styles.css?v=6" />
   <!-- Plotly.js -->
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
@@ -31,12 +31,12 @@
     </svg>
 
     <div class="hero-content">
-      <p class="hero-kicker">⚽ Visualización de estadios</p>
-      <h1 class="hero-title">¿Alguna vez te has preguntado cuáles son los estadios con mayor capacidad en el mundo?</h1>
-      <button id="btn-explore" class="hero-btn" type="button">¡Averígualo aquí!</button>
+      <h1 class="hero-title">Los estadios con mayor capacidad del mundo</h1>
+      <p class="hero-sub">Compara cuántas personas caben en cada estadio y descubre dónde están.</p>
+      <button id="btn-explore" class="hero-btn" type="button">Explorar estadios</button>
     </div>
 
-    <button class="hero-scroll" id="hero-scroll" type="button" aria-label="Bajar al mapa">
+    <button class="hero-scroll" id="hero-scroll" type="button" aria-label="Bajar al gráfico de capacidad">
       <span></span>
     </button>
   </section>
@@ -44,8 +44,7 @@
   <div class="app" id="app-top">
   <header>
     <div class="header-text">
-      <h1>⚽ Estadios del mundo</h1>
-      <p>Explora sus aforos en el mapa y escucha el rugido de cada hinchada.</p>
+      <h1>Estadios con mayor capacidad del mundo</h1>
     </div>
     <div class="header-actions">
       <!-- Botón para conectar el Arduino (servo). Oculto por ahora; ver README, sección "Integración con Arduino" para reactivarlo. -->
@@ -77,16 +76,14 @@
       <div class="panel-content">
       <div class="panel-head">
         <div>
-          <p class="panel-kicker">Explora los datos</p>
-          <h2>Estadios por aforo</h2>
-          <p class="panel-intro">Filtra el mapa y compara los recintos con más espectadores.</p>
+          <h2>Capacidad de los estadios</h2>
         </div>
         <div class="panel-tools">
           <button id="panel-drag" class="panel-drag" type="button" title="Arrastrar para mover el panel" aria-label="Mover panel de filtros">⠿</button>
         </div>
       </div>
       <div class="controls">
-        <p class="section-label">Ajusta la selección</p>
+        <p class="section-label">Filtra los estadios</p>
         <div class="filter-row">
           <label for="filter-confederation">Confederación</label>
           <select id="filter-confederation" class="filter-select" title="Filtrar por confederación"></select>
@@ -96,10 +93,10 @@
           <select id="filter-country" class="filter-select" title="Filtrar por país"></select>
         </div>
         <div class="filter-row filter-row--range">
-          <label for="filter-capacity">Aforo mínimo</label>
+          <label for="filter-capacity">Capacidad mínima</label>
           <input type="range" id="filter-capacity" class="filter-range" />
           <output id="filter-capacity-value" class="filter-range-value"></output>
-          <span class="filter-hint">Muestra estadios con al menos este aforo.</span>
+          <span class="filter-hint">Muestra estadios donde caben al menos esta cantidad de personas.</span>
         </div>
         <div class="filter-foot">
           <span id="filter-summary" class="filter-summary"></span>
@@ -107,8 +104,8 @@
         </div>
       </div>
       <div class="chart-heading">
-        <h3>Top 8 por aforo</h3>
-        <p>Selecciona una barra para escuchar y ubicar el estadio.</p>
+        <h3>Estadios con mayor capacidad</h3>
+        <p>Hasta 8 estadios según tus filtros. Selecciona una barra para ver su ubicación.</p>
       </div>
       <div id="bar"></div>
       <button id="btn-show-map" class="btn-show-map" type="button">🗺️ Explorar en el mapa</button>
@@ -120,8 +117,8 @@
     </div>
 
     <!-- Estado del sonido, superpuesto sobre el mapa -->
-    <div class="map-guide">En el mapa, un marcador más grande representa mayor aforo. Selecciona uno para escuchar.</div>
-    <div id="now-playing">🔇 Selecciona un estadio para escuchar a su hinchada.</div>
+    <div class="map-guide">A mayor capacidad, marcador más grande y sonido más fuerte. Selecciona un estadio para escucharlo.</div>
+    <div id="now-playing">🔇 Selecciona un estadio para activar el sonido.</div>
 
     <!-- Estado de la conexión con el Arduino / servo. Oculto por ahora; ver README para reactivarlo junto con el botón. -->
     <!-- <div id="arduino-status">🔌 Arduino sin conectar.</div> -->
@@ -129,7 +126,7 @@
   </div><!-- /.app -->
 
   <script src="data.js"></script>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
   <script src="arduino.js"></script>
 </body>
 </html>
