@@ -184,6 +184,17 @@ async function playGoal(stadium, zoom = false) {
   if (sequence !== goalSequence) return;
   stopAllSound(true);
 
+  // V1 conserva la interacción directa: solo reproduce el crowd-cheer.
+  // Las versiones posteriores incorporan el anuncio y la convergencia.
+  if (activeVersion === "v1") {
+    const intensity = intensityOf(stadium);
+    const npEl = document.getElementById("now-playing");
+    if (npEl) npEl.textContent =
+      `⚽ ${stadium.name} — ${stadium.city} · Aforo ${stadium.capacity.toLocaleString("es")}`;
+    playCrowdCheer(stadium, intensity);
+    return;
+  }
+
   // Si el mapa está oculto, lo revelamos primero y esperamos a que
   // Plotly esté listo (necesitamos las coordenadas en pantalla).
   await showMap();
@@ -506,6 +517,7 @@ function triggerMarkerShake() {
 //  Vista inicial = solo ranking a pantalla completa.
 //  Al revelar el mapa, el panel vuelve a flotar sobre él.
 // ============================================================
+let activeVersion = "v2";
 let mapVisible = false;
 let mapReadyPromise = Promise.resolve();
 
@@ -524,6 +536,41 @@ function showMap() {
   }, 50));
   return mapReadyPromise;
 }
+
+function setVersion(version) {
+  activeVersion = version;
+  document.documentElement.dataset.version = version;
+  document.querySelectorAll(".version-tab").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.version === version));
+  });
+  const heroTitle = document.getElementById("hero-title");
+  const isV1 = version === "v1";
+  if (heroTitle) heroTitle.textContent = isV1
+    ? "Los templos del fútbol mundial"
+    : "Los estadios con mayor capacidad del mundo";
+  const heroSource = document.getElementById("hero-source");
+  if (heroSource) {
+    heroSource.textContent = isV1
+      ? "Datos de estadios recopilados desde Wikidata."
+      : "Compara cuántas personas caben en cada estadio y descubre dónde están.";
+  }
+  const stage = document.getElementById("stage");
+  const shouldShowMap = version === "v1";
+  if (stage) stage.classList.toggle("map-hidden", !shouldShowMap);
+  mapVisible = shouldShowMap;
+  if (shouldShowMap) {
+    mapReadyPromise = new Promise(resolve => setTimeout(() => {
+      resizeMapSoon();
+      Promise.all([drawMap(), drawBar()]).then(resolve);
+    }, 50));
+  } else {
+    drawBar();
+  }
+}
+
+document.querySelectorAll(".version-tab").forEach(button => {
+  button.addEventListener("click", () => setVersion(button.dataset.version));
+});
 
 
 let mapInitialized = false;

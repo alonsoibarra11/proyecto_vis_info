@@ -11,6 +11,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 </head>
 <body>
+  <nav class="version-nav" aria-label="Versiones de la visualización">
+    <span class="version-nav-label">Versiones</span>
+    <div class="version-tabs" role="group" aria-label="Seleccionar versión">
+      <button type="button" class="version-tab" data-version="v1" aria-pressed="false">V1</button>
+      <button type="button" class="version-tab" data-version="v2" aria-pressed="true">V2</button>
+      <button type="button" class="version-tab" data-version="v3" aria-pressed="false">V3</button>
+      <button type="button" class="version-tab" data-version="v4" aria-pressed="false">V4</button>
+    </div>
+  </nav>
   <!-- ===== Portada de bienvenida (scroll hacia el mapa) ===== -->
   <section class="hero" id="hero">
     <!-- Fondo: líneas de cancha de fútbol dibujadas con SVG -->
@@ -31,8 +40,8 @@
     </svg>
 
     <div class="hero-content">
-      <h1 class="hero-title">Los estadios con mayor capacidad del mundo</h1>
-      <p class="hero-sub">Compara cuántas personas caben en cada estadio y descubre dónde están.</p>
+      <h1 class="hero-title" id="hero-title">Los estadios con mayor capacidad del mundo</h1>
+      <p class="hero-sub" id="hero-source">Compara cuántas personas caben en cada estadio y descubre dónde están.</p>
       <button id="btn-explore" class="hero-btn" type="button">Explorar estadios</button>
     </div>
 
