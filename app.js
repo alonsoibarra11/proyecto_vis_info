@@ -974,11 +974,11 @@ function drawBar() {
     customdata: sorted,
     marker: {
       color: values,
-      colorscale: overview
-        ? activeVersion === "v3"
-          ? [[0, "#2b6cb0"], [0.5, "#f2a900"], [1, "#e53e3e"]]
-          : [[0, "#3976b8"], [0.58, "#5489b4"], [1, "#e58b00"]]
-        : [[0, "#2b6cb0"], [1, "#f2a900"]],
+      colorscale: activeVersion === "v3"
+        ? [[0, "#2b6cb0"], [0.5, "#f2a900"], [1, "#e53e3e"]]
+        : overview
+          ? [[0, "#3976b8"], [0.58, "#5489b4"], [1, "#e58b00"]]
+          : [[0, "#2b6cb0"], [1, "#f2a900"]],
       line: { color: p.markerLine, width: 0.5 }
     },
     hovertemplate: "<b>%{y}</b><br>Capacidad: %{x:,.0f} personas<extra></extra>"
