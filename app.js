@@ -557,9 +557,7 @@ function setVersion(version) {
   const isV1 = version === "v1";
   if (heroTitle) heroTitle.textContent = isV1
     ? "Los templos del fútbol mundial"
-    : version === "v2"
-      ? "¿Alguna vez te has preguntado cuáles son los estadios con mayor capacidad en el mundo?"
-      : "Los estadios con mayor capacidad del mundo";
+    : "¿Alguna vez te has preguntado cuáles son los estadios con mayor capacidad en el mundo?";
   const heroButton = document.getElementById("btn-explore");
   if (heroButton) heroButton.textContent = version === "v2" ? "¡Averígualo aquí!" : "Explorar estadios";
   const heroSource = document.getElementById("hero-source");
