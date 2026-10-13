@@ -35,17 +35,16 @@ function intensityOf(st) {
 //  FILTROS DE ESTADIOS (combinables, se aplican con AND)
 //  `visibleStadiums()` devuelve el subconjunto activo; el mapa y el
 //  ranking se dibujan siempre a partir de este subconjunto.
-//    - confederation: "Todas" o una confederación concreta
 //    - country:       "Todos" o un país concreto
-//    - minCapacity:   capacidad mínima (espectadores)
+//    - minCapacity/maxCapacity: intervalo de capacidad (espectadores)
 // ============================================================
-const CONFEDERATIONS = ["Todas", "UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC"];
-
 const filters = {
   confederation: "Todas",
   country: "Todos",
-  minCapacity: CAP_MIN
+  minCapacity: CAP_MIN,
+  maxCapacity: CAP_MAX
 };
+const CONFEDERATIONS = ["Todas", "UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC"];
 
 // Países presentes en el dataset, ordenados alfabéticamente (para el <select>).
 const COUNTRIES = [...new Set(STADIUMS.map(s => s.country).filter(Boolean))]
@@ -53,9 +52,10 @@ const COUNTRIES = [...new Set(STADIUMS.map(s => s.country).filter(Boolean))]
 
 function visibleStadiums() {
   return STADIUMS.filter(s => {
-    if (filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
+    if (activeVersion === "v3" && (s.capacity < filters.minCapacity || s.capacity > filters.maxCapacity)) return false;
+    if (activeVersion !== "v3" && filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
     if (filters.country !== "Todos" && s.country !== filters.country) return false;
-    if (s.capacity < filters.minCapacity) return false;
+    if (activeVersion !== "v3" && s.capacity < filters.minCapacity) return false;
     return true;
   });
 }
@@ -520,6 +520,8 @@ function triggerMarkerShake() {
 let activeVersion = "v2";
 let mapVisible = false;
 let mapReadyPromise = Promise.resolve();
+let guidedIntroShown = false;
+let guidedIntroPending = false;
 
 function showMap() {
   if (mapVisible) return mapReadyPromise;
@@ -539,7 +541,15 @@ function showMap() {
 
 function setVersion(version) {
   activeVersion = version;
+  filters.confederation = "Todas";
+  filters.country = "Todos";
+  filters.minCapacity = CAP_MIN;
+  filters.maxCapacity = CAP_MAX;
   document.documentElement.dataset.version = version;
+  const guidedModal = document.getElementById("guided-tour");
+  if (guidedModal) guidedModal.hidden = true;
+  guidedIntroPending = version === "v3" && !guidedIntroShown;
+  if (version === "v3") maybeShowGuidedIntro();
   document.querySelectorAll(".version-tab").forEach(button => {
     button.setAttribute("aria-pressed", String(button.dataset.version === version));
   });
@@ -547,12 +557,18 @@ function setVersion(version) {
   const isV1 = version === "v1";
   if (heroTitle) heroTitle.textContent = isV1
     ? "Los templos del fútbol mundial"
-    : "Los estadios con mayor capacidad del mundo";
+    : version === "v2"
+      ? "¿Alguna vez te has preguntado cuáles son los estadios con mayor capacidad en el mundo?"
+      : "Los estadios con mayor capacidad del mundo";
+  const heroButton = document.getElementById("btn-explore");
+  if (heroButton) heroButton.textContent = version === "v2" ? "¡Averígualo aquí!" : "Explorar estadios";
   const heroSource = document.getElementById("hero-source");
   if (heroSource) {
     heroSource.textContent = isV1
       ? "Datos de estadios recopilados desde Wikidata."
-      : "Compara cuántas personas caben en cada estadio y descubre dónde están.";
+      : version === "v3"
+        ? "Compara el aforo máximo registrado de los estadios. Explora su capacidad y ubicación; el dato describe el recinto, no la asistencia a un partido."
+        : "Compara cuántas personas caben en cada estadio y descubre dónde están.";
   }
   const stage = document.getElementById("stage");
   const shouldShowMap = version === "v1";
@@ -566,6 +582,8 @@ function setVersion(version) {
   } else {
     drawBar();
   }
+  syncFilterControls();
+  applyFilters();
 }
 
 document.querySelectorAll(".version-tab").forEach(button => {
@@ -929,6 +947,13 @@ function drawBar() {
     .sort((a, b) => b.capacity - a.capacity)
     .slice(0, BAR_TOP_N);
   const values = sorted.map(s => s.capacity);
+  const shownMin = values.length ? Math.min(...values) : 0;
+  const shownMax = values.length ? Math.max(...values) : 0;
+  const shownSpread = shownMax - shownMin;
+  const v3AxisPadding = shownSpread > 0 ? shownSpread * 0.12 : shownMax * 0.04;
+  const v3AxisRange = values.length
+    ? [Math.max(0, shownMin - v3AxisPadding), shownMax + v3AxisPadding]
+    : undefined;
   const labels = sorted.map(s => s.name);
   const barElement = document.getElementById("bar");
   const overview = !mapVisible;
@@ -950,7 +975,9 @@ function drawBar() {
     marker: {
       color: values,
       colorscale: overview
-        ? [[0, "#3976b8"], [0.58, "#5489b4"], [1, "#e58b00"]]
+        ? activeVersion === "v3"
+          ? [[0, "#2b6cb0"], [0.5, "#f2a900"], [1, "#e53e3e"]]
+          : [[0, "#3976b8"], [0.58, "#5489b4"], [1, "#e58b00"]]
         : [[0, "#2b6cb0"], [1, "#f2a900"]],
       line: { color: p.markerLine, width: 0.5 }
     },
@@ -963,14 +990,16 @@ function drawBar() {
     font: { color: p.text },
     separators: overview ? ",." : undefined,
     height: overview ? Math.max(450, Math.min(600, Math.round(window.innerHeight * 0.58))) : undefined,
-    margin: { l: labelMargin, r: overview ? 86 : 16, t: overview ? 16 : 6, b: overview ? 58 : 44 },
+    margin: { l: labelMargin, r: overview ? 108 : 16, t: overview ? 16 : 6, b: overview ? 58 : 44 },
     bargap: overview ? 0.34 : 0.18,
     xaxis: {
       title: { text: "Capacidad máxima (personas)", font: { size: overview ? 13 : 11, color: p.muted }, standoff: 12 },
       gridcolor: p.grid, zerolinecolor: p.grid,
       tickfont: { size: overview ? 12 : 10, color: p.muted },
       tickformat: overview ? ",.0f" : undefined,
-      range: overview && values.length ? [0, Math.max(...values) * 1.16] : undefined,
+      range: activeVersion === "v3"
+        ? v3AxisRange
+        : overview && values.length ? [0, shownMax * 1.16] : undefined,
       showline: false,
       fixedrange: overview
     },
@@ -1039,7 +1068,83 @@ function resetMapView() {
   }).then(() => schedulePositionImages());
 }
 
-// ---------- Panel de filtros (confederación + país + capacidad mínima) ----------
+// Recorrido breve de contraste: primero el estadio de menor aforo y luego el mayor.
+const guidedPair = [
+  [...STADIUMS].sort((a, b) => a.capacity - b.capacity)[0],
+  [...STADIUMS].sort((a, b) => b.capacity - a.capacity)[0]
+];
+let guidedStep = -1;
+function showGuidedStep(index) {
+  guidedStep = index;
+  const stadium = guidedPair[index];
+  const copy = document.getElementById("guided-tour-copy");
+  const start = document.getElementById("guided-tour-start");
+  const next = document.getElementById("guided-tour-next");
+  const close = document.getElementById("guided-tour-close");
+  const title = document.getElementById("guided-tour-title");
+  if (title) title.textContent = index === 0 ? "Estadio pequeño" : "Estadio grande";
+  if (copy) copy.textContent = `${stadium.name}, ${stadium.city}: capacidad para ${stadium.capacity.toLocaleString("es")} personas. La animación representa la llegada de público a este estadio.`;
+  if (start) start.hidden = true;
+  if (next) { next.hidden = index !== 0; next.textContent = "Ahora descubre el estadio grande"; }
+  if (close) close.hidden = false;
+  if (close) close.textContent = "Terminar recorrido";
+}
+
+function prepareGuidedIntro() {
+  const stadium = guidedPair[0];
+  const title = document.getElementById("guided-tour-title");
+  const copy = document.getElementById("guided-tour-copy");
+  const start = document.getElementById("guided-tour-start");
+  const next = document.getElementById("guided-tour-next");
+  const close = document.getElementById("guided-tour-close");
+  if (title) title.textContent = "Primero: un estadio pequeño";
+  if (copy) copy.textContent = `Antes de la animación: ${stadium.name}, ${stadium.city}, con capacidad para ${stadium.capacity.toLocaleString("es")} personas. Observa cómo se representa la llegada de público.`;
+  if (start) { start.hidden = false; start.textContent = "Ver el estadio pequeño"; }
+  if (next) next.hidden = true;
+  if (close) { close.hidden = false; close.textContent = "Explorar sin guía"; }
+  guidedStep = -1;
+}
+
+async function runGuidedDemo(index) {
+  if (activeVersion !== "v3") return;
+  const modal = document.getElementById("guided-tour");
+  if (modal) modal.hidden = true;
+  guidedStep = index;
+  await playGoal(guidedPair[index], true);
+  if (activeVersion !== "v3") return;
+  showGuidedStep(index);
+  if (modal) modal.hidden = false;
+}
+
+const guidedStart = document.getElementById("guided-tour-start");
+if (guidedStart) guidedStart.addEventListener("click", async () => {
+  const rangeMin = Math.floor(CAP_MIN / 1000) * 1000;
+  const rangeMax = Math.ceil(CAP_MAX / 1000) * 1000;
+  filters.country = "Todos";
+  filters.minCapacity = rangeMin;
+  filters.maxCapacity = rangeMax;
+  document.getElementById("filter-country").value = "Todos";
+  document.getElementById("filter-capacity-min").value = String(rangeMin);
+  document.getElementById("filter-capacity-max").value = String(rangeMax);
+  document.getElementById("filter-capacity-min-value").textContent = `${rangeMin.toLocaleString("es")} personas`;
+  document.getElementById("filter-capacity-max-value").textContent = `${rangeMax.toLocaleString("es")} personas`;
+  applyFilters();
+  await runGuidedDemo(0);
+});
+const guidedNext = document.getElementById("guided-tour-next");
+if (guidedNext) guidedNext.addEventListener("click", () => runGuidedDemo(1));
+const guidedClose = document.getElementById("guided-tour-close");
+if (guidedClose) guidedClose.addEventListener("click", () => {
+  guidedStep = -1;
+  document.getElementById("guided-tour").hidden = true;
+});
+const guidedReopen = document.getElementById("guided-tour-reopen");
+if (guidedReopen) guidedReopen.addEventListener("click", () => {
+  prepareGuidedIntro();
+  document.getElementById("guided-tour").hidden = false;
+});
+
+// ---------- Panel de filtros (país + intervalo de capacidad) ----------
 // Redibuja mapa y ranking, y refresca el texto de resultados.
 function applyFilters() {
   drawMap();
@@ -1054,13 +1159,41 @@ function updateFilterSummary() {
   el.textContent = `${n} de ${STADIUMS.length} estadios`;
 }
 
+function syncFilterControls() {
+  const confSel = document.getElementById("filter-confederation");
+  const countrySel = document.getElementById("filter-country");
+  const minRange = document.getElementById("filter-capacity-min");
+  const maxRange = document.getElementById("filter-capacity-max");
+  const minOut = document.getElementById("filter-capacity-min-value");
+  const maxOut = document.getElementById("filter-capacity-max-value");
+  const oldRange = document.getElementById("filter-capacity");
+  const oldOut = document.getElementById("filter-capacity-value");
+  const rangeMin = Math.floor(CAP_MIN / 1000) * 1000;
+  const rangeMax = Math.ceil(CAP_MAX / 1000) * 1000;
+  const fmt = value => `${Number(value).toLocaleString("es")} personas`;
+  if (confSel) confSel.value = filters.confederation;
+  if (countrySel) countrySel.value = filters.country;
+  if (oldRange) oldRange.value = String(filters.minCapacity);
+  if (oldOut) oldOut.textContent = fmt(filters.minCapacity);
+  if (minRange) minRange.value = String(Math.max(rangeMin, Math.min(rangeMax, filters.minCapacity)));
+  if (maxRange) maxRange.value = String(Math.max(rangeMin, Math.min(rangeMax, filters.maxCapacity)));
+  if (minOut) minOut.textContent = fmt(minRange?.value || rangeMin);
+  if (maxOut) maxOut.textContent = fmt(maxRange?.value || rangeMax);
+}
+
 function buildFilter() {
   const confSel = document.getElementById("filter-confederation");
   const countrySel = document.getElementById("filter-country");
-  const capRange = document.getElementById("filter-capacity");
-  const capOut = document.getElementById("filter-capacity-value");
+  const oldRange = document.getElementById("filter-capacity");
+  const oldOut = document.getElementById("filter-capacity-value");
+  const minRange = document.getElementById("filter-capacity-min");
+  const maxRange = document.getElementById("filter-capacity-max");
+  const minOut = document.getElementById("filter-capacity-min-value");
+  const maxOut = document.getElementById("filter-capacity-max-value");
+  const rangeMin = Math.floor(CAP_MIN / 1000) * 1000;
+  const rangeMax = Math.ceil(CAP_MAX / 1000) * 1000;
+  const fmt = value => `${Number(value).toLocaleString("es")} personas`;
 
-  // --- Confederación (con conteo por opción) ---
   if (confSel) {
     const counts = {};
     for (const s of STADIUMS) counts[s.confederation] = (counts[s.confederation] || 0) + 1;
@@ -1073,11 +1206,7 @@ function buildFilter() {
       opt.textContent = `${conf} (${n})`;
       confSel.appendChild(opt);
     });
-    confSel.value = filters.confederation;
-    confSel.addEventListener("change", () => {
-      filters.confederation = confSel.value;
-      applyFilters();
-    });
+    confSel.addEventListener("change", () => { filters.confederation = confSel.value; applyFilters(); });
   }
 
   // --- País ---
@@ -1101,21 +1230,32 @@ function buildFilter() {
     });
   }
 
-  // --- Capacidad mínima (slider) ---
-  if (capRange) {
-    // Paso "redondo" para que el slider se sienta natural.
-    capRange.min = String(Math.floor(CAP_MIN / 1000) * 1000);
-    capRange.max = String(Math.ceil(CAP_MAX / 1000) * 1000);
-    capRange.step = "1000";
-    capRange.value = String(filters.minCapacity);
-    const fmt = (v) => Number(v).toLocaleString("es") + " personas";
-    if (capOut) capOut.textContent = fmt(capRange.value);
-    // input = actualiza etiqueta en vivo; change = redibuja (más barato).
-    capRange.addEventListener("input", () => {
-      if (capOut) capOut.textContent = fmt(capRange.value);
+  if (oldRange) {
+    oldRange.min = String(Math.floor(CAP_MIN / 1000) * 1000);
+    oldRange.max = String(Math.ceil(CAP_MAX / 1000) * 1000);
+    oldRange.step = "1000";
+    oldRange.addEventListener("input", () => { if (oldOut) oldOut.textContent = fmt(oldRange.value); });
+    oldRange.addEventListener("change", () => { filters.minCapacity = Number(oldRange.value) || CAP_MIN; applyFilters(); });
+  }
+
+  // --- Intervalo de capacidad ---
+  for (const [input, output, side] of [[minRange, minOut, "min"], [maxRange, maxOut, "max"]]) {
+    if (!input) continue;
+    input.min = String(rangeMin);
+    input.max = String(rangeMax);
+    input.step = "1000";
+    input.value = String(side === "min" ? filters.minCapacity : filters.maxCapacity);
+    if (output) output.textContent = fmt(input.value);
+    input.addEventListener("input", () => {
+      let value = Number(input.value);
+      if (side === "min" && value > Number(maxRange.value)) value = Number(maxRange.value);
+      if (side === "max" && value < Number(minRange.value)) value = Number(minRange.value);
+      input.value = String(value);
+      if (output) output.textContent = fmt(value);
     });
-    capRange.addEventListener("change", () => {
-      filters.minCapacity = parseInt(capRange.value, 10) || CAP_MIN;
+    input.addEventListener("change", () => {
+      filters.minCapacity = Number(minRange.value);
+      filters.maxCapacity = Number(maxRange.value);
       applyFilters();
     });
   }
@@ -1126,16 +1266,22 @@ function buildFilter() {
     resetBtn.addEventListener("click", () => {
       filters.confederation = "Todas";
       filters.country = "Todos";
-      filters.minCapacity = CAP_MIN;
+      filters.minCapacity = activeVersion === "v3" ? rangeMin : CAP_MIN;
+      filters.maxCapacity = rangeMax;
       if (confSel) confSel.value = "Todas";
       if (countrySel) countrySel.value = "Todos";
-      if (capRange) capRange.value = String(CAP_MIN);
-      if (capOut) capOut.textContent = Number(CAP_MIN).toLocaleString("es") + " personas";
+      if (oldRange) oldRange.value = String(CAP_MIN);
+      if (oldOut) oldOut.textContent = fmt(CAP_MIN);
+      if (minRange) minRange.value = String(rangeMin);
+      if (maxRange) maxRange.value = String(rangeMax);
+      if (minOut) minOut.textContent = fmt(rangeMin);
+      if (maxOut) maxOut.textContent = fmt(rangeMax);
       applyFilters();
     });
   }
 
   updateFilterSummary();
+  syncFilterControls();
 }
 
 // ---------- Toggle de tema claro/oscuro ----------
@@ -1286,6 +1432,18 @@ function goToMap() {
   const target = document.getElementById("app-top");
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+function maybeShowGuidedIntro() {
+  if (!guidedIntroPending || activeVersion !== "v3") return;
+  const appTop = document.getElementById("app-top");
+  if (!appTop || appTop.getBoundingClientRect().top > 80) return;
+  const modal = document.getElementById("guided-tour");
+  if (!modal) return;
+  prepareGuidedIntro();
+  guidedIntroPending = false;
+  guidedIntroShown = true;
+  modal.hidden = false;
+}
+window.addEventListener("scroll", maybeShowGuidedIntro, { passive: true });
 const exploreBtn = document.getElementById("btn-explore");
 if (exploreBtn) exploreBtn.addEventListener("click", goToMap);
 const heroScroll = document.getElementById("hero-scroll");

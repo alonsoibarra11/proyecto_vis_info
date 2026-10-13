@@ -771,6 +771,21 @@ header p {
 /* Slider de capacidad mínima */
 .filter-row--range { gap: 7px; }
 
+.v3-only { display: none !important; }
+html[data-version="v3"] .v2-only { display: none !important; }
+html[data-version="v3"] .filter-row.v3-only { display: flex !important; }
+html[data-version="v3"] p.v3-only,
+html[data-version="v3"] .map-guide.v3-only,
+html[data-version="v3"] .guided-tour-reopen.v3-only { display: block !important; }
+html[data-version="v3"] .guided-tour.v3-only:not([hidden]) { display: grid !important; }
+.guided-tour[hidden] { display: none !important; }
+.guided-tour-reopen { margin: 10px 0 0 auto; padding: 10px 16px; border: 0; border-radius: 9px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+.guided-tour-reopen:hover { background: var(--accent-2); }
+
+.capacity-range-controls { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 5px 12px; }
+.capacity-range-controls label { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+.capacity-range-controls .filter-range { grid-column: 1 / -1; }
+
 .filter-range {
   width: 100%;
   accent-color: var(--accent);
@@ -876,6 +891,29 @@ button.toggle.active {
   z-index: 4;
   pointer-events: none;
 }
+.map-guide strong { color: var(--accent-2); }
+
+.guided-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(10, 18, 32, 0.68);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.guided-tour-card { width: min(100%, 640px); padding: clamp(30px, 5.5vw, 48px); border: 1px solid var(--border); border-radius: 22px; background: var(--panel-solid); color: var(--text); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35); }
+.guided-tour-kicker { color: var(--accent-2); font-size: 14px; font-weight: 750; letter-spacing: 1.3px; text-transform: uppercase; }
+.guided-tour-card h2 { margin: 13px 0; font-size: clamp(30px, 4.5vw, 40px); line-height: 1.15; }
+.guided-tour-card p { margin: 0; max-width: 58ch; color: var(--muted); font-size: clamp(18px, 2vw, 20px); line-height: 1.6; }
+.guided-tour-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.guided-tour button { min-height: 50px; padding: 12px 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 16px; font-weight: 650; }
+.guided-tour button.guided-tour-primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+.guided-tour button.guided-tour-primary:hover { background: var(--accent-2); }
+.guided-tour button:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.guided-tour button.guided-tour-primary:hover { color: #fff; }
 
 /* ===== Estado del sonido (overlay inferior) ===== */
 #now-playing {
@@ -929,6 +967,10 @@ button.toggle.active {
   .stage.map-hidden .chart-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
   .stage.map-hidden .chart-heading p { text-align: left; }
   .stage.map-hidden #bar { min-height: 320px; }
+  .guided-tour { padding: 14px; }
+  .guided-tour-card { padding: 28px 22px; }
+  .guided-tour-actions { flex-direction: column; }
+  .guided-tour-actions button { width: 100%; }
   .panel-resize-edge { display: none; }
   .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; }
   .section-label, .filter-row--range, .filter-foot { grid-column: 1 / -1; }

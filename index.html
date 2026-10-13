@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es" data-theme="light" data-version="v2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -40,9 +40,9 @@
     </svg>
 
     <div class="hero-content">
-      <h1 class="hero-title" id="hero-title">Los estadios con mayor capacidad del mundo</h1>
+      <h1 class="hero-title" id="hero-title">¿Alguna vez te has preguntado cuáles son los estadios con mayor capacidad en el mundo?</h1>
       <p class="hero-sub" id="hero-source">Compara cuántas personas caben en cada estadio y descubre dónde están.</p>
-      <button id="btn-explore" class="hero-btn" type="button">Explorar estadios</button>
+      <button id="btn-explore" class="hero-btn" type="button">¡Averígualo aquí!</button>
     </div>
 
     <button class="hero-scroll" id="hero-scroll" type="button" aria-label="Bajar al gráfico de capacidad">
@@ -93,7 +93,7 @@
       </div>
       <div class="controls">
         <p class="section-label">Filtra los estadios</p>
-        <div class="filter-row">
+        <div class="filter-row v2-only">
           <label for="filter-confederation">Confederación</label>
           <select id="filter-confederation" class="filter-select" title="Filtrar por confederación"></select>
         </div>
@@ -101,11 +101,21 @@
           <label for="filter-country">País del estadio</label>
           <select id="filter-country" class="filter-select" title="Filtrar por país"></select>
         </div>
-        <div class="filter-row filter-row--range">
+        <div class="filter-row filter-row--range v2-only">
           <label for="filter-capacity">Capacidad mínima</label>
           <input type="range" id="filter-capacity" class="filter-range" />
           <output id="filter-capacity-value" class="filter-range-value"></output>
           <span class="filter-hint">Muestra estadios donde caben al menos esta cantidad de personas.</span>
+        </div>
+        <div class="filter-row filter-row--range v3-only">
+          <label>Rango de capacidad</label>
+          <div class="capacity-range-controls">
+            <label for="filter-capacity-min">Desde <output id="filter-capacity-min-value"></output></label>
+            <input type="range" id="filter-capacity-min" class="filter-range" aria-label="Capacidad mínima" />
+            <label for="filter-capacity-max">Hasta <output id="filter-capacity-max-value"></output></label>
+            <input type="range" id="filter-capacity-max" class="filter-range" aria-label="Capacidad máxima" />
+          </div>
+          <span class="filter-hint">Aforo máximo registrado por estadio. Ajusta ambos extremos para comparar un intervalo.</span>
         </div>
         <div class="filter-foot">
           <span id="filter-summary" class="filter-summary"></span>
@@ -114,9 +124,11 @@
       </div>
       <div class="chart-heading">
         <h3>Estadios con mayor capacidad</h3>
-        <p>Hasta 8 estadios según tus filtros. Selecciona una barra para ver su ubicación.</p>
+        <p class="v2-only">Hasta 8 estadios según tus filtros. Selecciona una barra para ver su ubicación.</p>
+        <p class="v3-only">Escala ajustada al aforo de los estadios mostrados (no parte de cero). Azul = menor; rojo = mayor. Selecciona una barra para ubicarla.</p>
       </div>
       <div id="bar"></div>
+      <button id="guided-tour-reopen" class="guided-tour-reopen v3-only" type="button">✨ Ver el recorrido guiado</button>
       <button id="btn-show-map" class="btn-show-map" type="button">🗺️ Explorar en el mapa</button>
       </div>
       <div class="panel-resize-edge panel-resize-edge--right" data-resize="right" role="separator" aria-label="Cambiar ancho del panel" tabindex="0"></div>
@@ -126,13 +138,27 @@
     </div>
 
     <!-- Estado del sonido, superpuesto sobre el mapa -->
-    <div class="map-guide">A mayor capacidad, marcador más grande y sonido más fuerte. Selecciona un estadio para escucharlo.</div>
+    <div class="map-guide v2-only">A mayor capacidad, marcador más grande y sonido más fuerte. Selecciona un estadio para escucharlo.</div>
+    <div class="map-guide v3-only"><strong>Cómo leer el mapa</strong><br />El tamaño y el color del círculo indican capacidad: azul = menor, rojo = mayor. El sonido es opcional; el aforo también se muestra en la ficha.</div>
     <div id="now-playing">🔇 Selecciona un estadio para activar el sonido.</div>
 
     <!-- Estado de la conexión con el Arduino / servo. Oculto por ahora; ver README para reactivarlo junto con el botón. -->
     <!-- <div id="arduino-status">🔌 Arduino sin conectar.</div> -->
   </div>
   </div><!-- /.app -->
+
+  <div class="guided-tour v3-only" id="guided-tour" role="dialog" aria-modal="true" aria-labelledby="guided-tour-title" hidden>
+    <section class="guided-tour-card">
+      <span class="guided-tour-kicker">Guía de primer uso · V3</span>
+        <h2 id="guided-tour-title">Primero: un estadio pequeño</h2>
+        <p id="guided-tour-copy">La guía te mostrará un estadio de menor capacidad antes de ejecutar la animación.</p>
+      <div class="guided-tour-actions">
+          <button id="guided-tour-start" class="guided-tour-primary" type="button">Ver el estadio pequeño</button>
+          <button id="guided-tour-next" class="guided-tour-primary" type="button" hidden>Ahora descubre el estadio grande</button>
+        <button id="guided-tour-close" type="button">Explorar sin guía</button>
+      </div>
+    </section>
+  </div>
 
   <script src="data.js"></script>
   <script src="app.js?v=7"></script>
