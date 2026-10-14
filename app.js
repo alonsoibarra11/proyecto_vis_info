@@ -119,6 +119,14 @@ let stopTimer = null;
 let levelRAF = null;                        // requestAnimationFrame del medidor
 let goalSequence = 0;                       // invalida secuencias interrumpidas
 
+// V4: el volumen por si solo no distingue bien "pocas" de "muchas" personas.
+// Sumamos DENSIDAD: mas capacidad => mas capas de multitud superpuestas,
+// cada una desfasada, con otro tono (playbackRate) y en otra posicion
+// del estereo; ademas mas reverberacion (sensacion de recinto grande).
+const MAX_VOICES = 6;
+let voices = [];                            // [{ player, panner }]
+let crowdReverb = null;
+
 async function initAudio() {
   if (audioReady) return;
   if (audioLoading) return audioLoading;    // ya se está cargando
@@ -138,6 +146,16 @@ async function initAudio() {
     // Cargamos el mp3 y esperamos a que el buffer esté listo.
     player = new Tone.Player({ url: CROWD_SOUND, autostart: false }).connect(playerGain);
     await Tone.loaded();                     // espera a que TODOS los buffers carguen
+
+    // V4: reverb + capas de voces que reutilizan el mismo buffer del mp3.
+    crowdReverb = new Tone.Reverb({ decay: 4, wet: 0 });
+    await crowdReverb.generate();
+    crowdReverb.connect(playerGain);
+    for (let i = 0; i < MAX_VOICES; i++) {
+      const panner = new Tone.Panner(0).connect(crowdReverb);
+      const p = new Tone.Player(player.buffer).connect(panner);
+      voices.push({ player: p, panner });
+    }
 
     audioReady = true;
   })();
@@ -172,6 +190,11 @@ function stopAllSound(fast = true) {
     // Paramos un poco después del fade para que no corte de golpe.
     try { player.stop("+" + (t + 0.05)); } catch (_) { /* noop */ }
   }
+  voices.forEach(v => {
+    if (v.player.state === "started") {
+      try { v.player.stop("+" + (t + 0.05)); } catch (_) { /* noop */ }
+    }
+  });
   stopLevelPump();
   emitBus("goal:stop", {});
 }
@@ -232,12 +255,15 @@ function playCrowdCheer(stadium, intensity) {
   stopAllSound(false);
 
   const contrast = Math.pow(intensity, 0.8);
-  const db = -20 + contrast * 20;
+  // En V4 el volumen pesa menos (rango de 10 dB en vez de 20): la diferencia
+  // la cargan la densidad, el estereo y la reverberacion.
+  const db = activeVersion === "v4" ? -10 + contrast * 10 : -20 + contrast * 20;
   const vol = Tone.dbToGain(db);
 
   const now = Tone.now();
   try { if (player.state === "started") player.stop(now); } catch (_) {}
-  player.start(now + 0.02);
+  if (activeVersion === "v4") playCrowdLayers(intensity, now);
+  else player.start(now + 0.02);
 
   playerGain.gain.cancelScheduledValues(now);
   playerGain.gain.setValueAtTime(0.0001, now);
@@ -254,6 +280,29 @@ function playCrowdCheer(stadium, intensity) {
 
   // Hace crecer y temblar el marcador del estadio seleccionado
   triggerMarkerShake();
+}
+
+// V4: reproduce entre 1 y MAX_VOICES copias del grito, segun la intensidad.
+//  - Estadio chico: 1 capa, centrada y seca  -> suena a "poca gente".
+//  - Estadio grande: 6 capas, abiertas en estereo y con eco -> "masa".
+function playCrowdLayers(intensity, now) {
+  const n = 1 + Math.round(intensity * (MAX_VOICES - 1));
+  const width = 0.3 + intensity * 0.6;           // apertura estereo
+  const dur = player.buffer.duration;
+  // 1/raiz(n) compensa la suma de capas; +7 dB compensa lo que "resta" la reverb.
+  const perVoice = Tone.gainToDb(1 / Math.sqrt(n)) + 7;
+
+  crowdReverb.wet.setValueAtTime(0.1 + intensity * 0.5, now);
+
+  voices.forEach((v, i) => {
+    try { if (v.player.state === "started") v.player.stop(now); } catch (_) {}
+    if (i >= n) return;
+    v.player.playbackRate = 0.9 + Math.random() * 0.2;  // cada capa con otro tono
+    v.player.volume.value = perVoice;
+    v.panner.pan.value = n === 1 ? 0 : (i / (n - 1) * 2 - 1) * width;
+    const offset = Math.random() * Math.min(1.5, dur * 0.3); // desfase
+    v.player.start(now + 0.02 + i * 0.06, offset);
+  });
 }
 
 // ============================================================
