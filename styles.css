@@ -777,6 +777,7 @@ html[data-version="v3"] .stage.map-hidden .side-panel {
 .filter-row--range { gap: 7px; }
 
 .v3-only { display: none !important; }
+html[data-version="v4"] .ranking-hint { display: none; }
 html[data-version="v3"] .v2-only { display: none !important; }
 html[data-version="v3"] .filter-row.v3-only { display: flex !important; }
 html[data-version="v3"] p.v3-only,

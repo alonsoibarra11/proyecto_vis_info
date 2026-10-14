@@ -1001,7 +1001,7 @@ function drawBar() {
   const v3AxisRange = values.length
     ? [Math.max(0, shownMin - v3AxisPadding), shownMax + v3AxisPadding]
     : undefined;
-  const labels = sorted.map(s => s.name);
+  const labels = sorted.map((s, index) => activeVersion === "v4" ? `<b>${index + 1}.</b> ${s.name}` : s.name);
   const barElement = document.getElementById("bar");
   const overview = !mapVisible;
   const barWidth = barElement?.clientWidth || 500;
