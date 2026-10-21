@@ -780,9 +780,11 @@ function scheduleHoverZoom(stadium) {
   mapHoverZoomTimer = setTimeout(() => {
     if (activeVersion !== "v4" || !mapVisible || !mapGd) return;
     Plotly.relayout(mapGd, {
+      "geo.projection.rotation.lon": stadium.lon,
+      "geo.projection.rotation.lat": stadium.lat,
       "geo.center.lat": stadium.lat,
       "geo.center.lon": stadium.lon,
-      "geo.projection.scale": 2.2
+      "geo.projection.scale": 4.5
     });
   }, 3500);
 }
