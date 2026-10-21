@@ -25,6 +25,7 @@ window.StadiumBus = StadiumBus;
 // ---------- Utilidades de escala ----------
 const capacities = STADIUMS.map(s => s.capacity);
 const CAP_MIN = Math.min(...capacities), CAP_MAX = Math.max(...capacities);
+const isV3Plus = () => activeVersion === "v3" || activeVersion === "v4";
 
 // Devuelve 0..1 según la capacidad del estadio (más aforo = más intenso).
 function intensityOf(st) {
@@ -52,10 +53,10 @@ const COUNTRIES = [...new Set(STADIUMS.map(s => s.country).filter(Boolean))]
 
 function visibleStadiums() {
   return STADIUMS.filter(s => {
-    if (activeVersion === "v3" && (s.capacity < filters.minCapacity || s.capacity > filters.maxCapacity)) return false;
-    if (activeVersion !== "v3" && filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
+    if (isV3Plus() && (s.capacity < filters.minCapacity || s.capacity > filters.maxCapacity)) return false;
+    if (!isV3Plus() && filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
     if (filters.country !== "Todos" && s.country !== filters.country) return false;
-    if (activeVersion !== "v3" && s.capacity < filters.minCapacity) return false;
+    if (!isV3Plus() && s.capacity < filters.minCapacity) return false;
     return true;
   });
 }
@@ -589,6 +590,14 @@ function showMap() {
 }
 
 function setVersion(version) {
+  clearTimeout(mapHoverZoomTimer);
+  if (rankingPanel?.classList.contains("is-fullscreen")) {
+    rankingPanel.classList.remove("is-fullscreen");
+    if (panelFullscreenBtn) {
+      panelFullscreenBtn.textContent = "⛶";
+      panelFullscreenBtn.setAttribute("aria-pressed", "false");
+    }
+  }
   activeVersion = version;
   filters.confederation = "Todas";
   filters.country = "Todos";
@@ -597,8 +606,8 @@ function setVersion(version) {
   document.documentElement.dataset.version = version;
   const guidedModal = document.getElementById("guided-tour");
   if (guidedModal) guidedModal.hidden = true;
-  guidedIntroPending = version === "v3" && !guidedIntroShown;
-  if (version === "v3") maybeShowGuidedIntro();
+  guidedIntroPending = isV3Plus() && !guidedIntroShown;
+  if (isV3Plus()) maybeShowGuidedIntro();
   document.querySelectorAll(".version-tab").forEach(button => {
     button.setAttribute("aria-pressed", String(button.dataset.version === version));
   });
@@ -613,7 +622,7 @@ function setVersion(version) {
   if (heroSource) {
     heroSource.textContent = isV1
       ? "Datos de estadios recopilados desde Wikidata."
-      : version === "v3"
+      : isV3Plus()
         ? "Compara el aforo máximo registrado de los estadios. Explora su capacidad y ubicación; el dato describe el recinto, no la asistencia a un partido."
         : "Compara cuántas personas caben en cada estadio y descubre dónde están.";
   }
@@ -713,9 +722,12 @@ function drawMap() {
       if (!mapInitialized) {
         gd.on("plotly_hover", ev => {
           const pt = ev.points && ev.points[0];
-          const stadium = pt && mapList[pt.pointIndex];
+          const pointIndex = pt && (pt.pointNumber ?? pt.pointIndex);
+          const stadium = Number.isInteger(pointIndex) ? mapList[pointIndex] : null;
           if (stadium) clearSelectedMarkerIfSame(stadium);
+          scheduleHoverZoom(stadium);
         });
+        gd.on("plotly_unhover", () => clearTimeout(mapHoverZoomTimer));
         gd.on("plotly_click", ev => {
           const pt = ev.points[0];
           const stadium = pt && mapList[pt.pointIndex];
@@ -758,8 +770,22 @@ let stadiumImgEls = [];
 let mapList = STADIUMS;   // lista de estadios actualmente dibujada en el mapa
 
 let mapGd = null;          // referencia al gráfico de Plotly
+let mapHoverZoomTimer = null;
 let positionRAF = null;    // rAF pendiente para reposicionar fotos (throttle)
 let selectedMarkerRAF = null;
+
+function scheduleHoverZoom(stadium) {
+  clearTimeout(mapHoverZoomTimer);
+  if (activeVersion !== "v4" || !stadium) return;
+  mapHoverZoomTimer = setTimeout(() => {
+    if (activeVersion !== "v4" || !mapVisible || !mapGd) return;
+    Plotly.relayout(mapGd, {
+      "geo.center.lat": stadium.lat,
+      "geo.center.lon": stadium.lon,
+      "geo.projection.scale": 2.2
+    });
+  }, 3500);
+}
 
 function scheduleSelectedMarker() {
   if (selectedMarkerRAF) return;
@@ -863,10 +889,10 @@ function buildStadiumImages(list) {
       scheduleSelectedMarker();
       playGoal(s);
     });
-    el.addEventListener("mouseenter", () => clearSelectedMarkerIfSame(s));
+    el.addEventListener("mouseenter", () => { clearSelectedMarkerIfSame(s); scheduleHoverZoom(s); });
     el.addEventListener("pointerenter", event => showStadiumTooltip(s, event));
     el.addEventListener("pointermove", event => showStadiumTooltip(s, event));
-    el.addEventListener("pointerleave", hideStadiumTooltip);
+    el.addEventListener("pointerleave", () => { clearTimeout(mapHoverZoomTimer); hideStadiumTooltip(); });
     cont.appendChild(el);
     return el;
   });
@@ -1020,8 +1046,10 @@ function drawBar() {
     cliponaxis: !overview,
     customdata: sorted,
     marker: {
-      color: values,
-      colorscale: activeVersion === "v3"
+      color: activeVersion === "v4"
+        ? sorted.map((_, index) => index === 0 ? "#e58b00" : "#3976b8")
+        : values,
+      colorscale: isV3Plus()
         ? [[0, "#2b6cb0"], [0.5, "#f2a900"], [1, "#e53e3e"]]
         : overview
           ? [[0, "#3976b8"], [0.58, "#5489b4"], [1, "#e58b00"]]
@@ -1153,12 +1181,12 @@ function prepareGuidedIntro() {
 }
 
 async function runGuidedDemo(index) {
-  if (activeVersion !== "v3") return;
+  if (!isV3Plus()) return;
   const modal = document.getElementById("guided-tour");
   if (modal) modal.hidden = true;
   guidedStep = index;
   await playGoal(guidedPair[index], true);
-  if (activeVersion !== "v3") return;
+  if (!isV3Plus()) return;
   showGuidedStep(index);
   if (modal) modal.hidden = false;
 }
@@ -1213,6 +1241,8 @@ function syncFilterControls() {
   const maxRange = document.getElementById("filter-capacity-max");
   const minOut = document.getElementById("filter-capacity-min-value");
   const maxOut = document.getElementById("filter-capacity-max-value");
+  const minNumber = document.getElementById("filter-capacity-min-number");
+  const maxNumber = document.getElementById("filter-capacity-max-number");
   const oldRange = document.getElementById("filter-capacity");
   const oldOut = document.getElementById("filter-capacity-value");
   const rangeMin = Math.floor(CAP_MIN / 1000) * 1000;
@@ -1226,6 +1256,8 @@ function syncFilterControls() {
   if (maxRange) maxRange.value = String(Math.max(rangeMin, Math.min(rangeMax, filters.maxCapacity)));
   if (minOut) minOut.textContent = fmt(minRange?.value || rangeMin);
   if (maxOut) maxOut.textContent = fmt(maxRange?.value || rangeMax);
+  if (minNumber) minNumber.value = String(filters.minCapacity);
+  if (maxNumber) maxNumber.value = String(filters.maxCapacity);
 }
 
 function buildFilter() {
@@ -1237,6 +1269,8 @@ function buildFilter() {
   const maxRange = document.getElementById("filter-capacity-max");
   const minOut = document.getElementById("filter-capacity-min-value");
   const maxOut = document.getElementById("filter-capacity-max-value");
+  const minNumber = document.getElementById("filter-capacity-min-number");
+  const maxNumber = document.getElementById("filter-capacity-max-number");
   const rangeMin = Math.floor(CAP_MIN / 1000) * 1000;
   const rangeMax = Math.ceil(CAP_MAX / 1000) * 1000;
   const fmt = value => `${Number(value).toLocaleString("es")} personas`;
@@ -1307,13 +1341,26 @@ function buildFilter() {
     });
   }
 
+  for (const [input, side] of [[minNumber, "min"], [maxNumber, "max"]]) {
+    if (!input) continue;
+    input.min = String(rangeMin); input.max = String(rangeMax); input.step = "1000";
+    input.addEventListener("change", () => {
+      let value = Number(input.value);
+      if (!Number.isFinite(value)) value = side === "min" ? rangeMin : rangeMax;
+      value = Math.max(rangeMin, Math.min(rangeMax, value));
+      if (side === "min") filters.minCapacity = Math.min(value, filters.maxCapacity);
+      else filters.maxCapacity = Math.max(value, filters.minCapacity);
+      syncFilterControls(); applyFilters();
+    });
+  }
+
   // --- Botón limpiar ---
   const resetBtn = document.getElementById("filter-reset");
   if (resetBtn) {
     resetBtn.addEventListener("click", () => {
       filters.confederation = "Todas";
       filters.country = "Todos";
-      filters.minCapacity = activeVersion === "v3" ? rangeMin : CAP_MIN;
+      filters.minCapacity = isV3Plus() ? rangeMin : CAP_MIN;
       filters.maxCapacity = rangeMax;
       if (confSel) confSel.value = "Todas";
       if (countrySel) countrySel.value = "Todos";
@@ -1323,6 +1370,7 @@ function buildFilter() {
       if (maxRange) maxRange.value = String(rangeMax);
       if (minOut) minOut.textContent = fmt(rangeMin);
       if (maxOut) maxOut.textContent = fmt(rangeMax);
+      syncFilterControls();
       applyFilters();
     });
   }
@@ -1352,6 +1400,24 @@ if (resetViewBtn) resetViewBtn.addEventListener("click", resetMapView);
 
 // ---------- Panel movible: el usuario puede reubicarlo dentro del mapa ----------
 const rankingPanel = document.getElementById("ranking-panel");
+const panelFullscreenBtn = document.getElementById("panel-fullscreen");
+if (rankingPanel && panelFullscreenBtn) {
+  const setPanelFullscreen = expanded => {
+    rankingPanel.classList.toggle("is-fullscreen", expanded);
+    panelFullscreenBtn.textContent = expanded ? "⤢" : "⛶";
+    panelFullscreenBtn.title = expanded ? "Volver al tamaño anterior" : "Agrandar filtros y gráfico a pantalla completa";
+    panelFullscreenBtn.setAttribute("aria-label", panelFullscreenBtn.title);
+    panelFullscreenBtn.setAttribute("aria-pressed", String(expanded));
+    setTimeout(() => { if (window.Plotly && document.getElementById("bar")) Plotly.Plots.resize(document.getElementById("bar")); }, 80);
+  };
+  panelFullscreenBtn.addEventListener("click", () => {
+    if (activeVersion !== "v4") return;
+    setPanelFullscreen(!rankingPanel.classList.contains("is-fullscreen"));
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && rankingPanel.classList.contains("is-fullscreen")) setPanelFullscreen(false);
+  });
+}
 const panelDragHandle = document.getElementById("panel-drag");
 if (rankingPanel && panelDragHandle) {
   panelDragHandle.addEventListener("pointerdown", (event) => {
@@ -1480,7 +1546,7 @@ function goToMap() {
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function maybeShowGuidedIntro() {
-  if (!guidedIntroPending || activeVersion !== "v3") return;
+  if (!guidedIntroPending || !isV3Plus()) return;
   const appTop = document.getElementById("app-top");
   if (!appTop || appTop.getBoundingClientRect().top > 80) return;
   const modal = document.getElementById("guided-tour");

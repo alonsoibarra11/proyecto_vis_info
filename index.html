@@ -88,6 +88,7 @@
           <h2>Capacidad de los estadios</h2>
         </div>
         <div class="panel-tools">
+          <button id="panel-fullscreen" class="panel-fullscreen" type="button" title="Agrandar filtros y gráfico a pantalla completa" aria-label="Agrandar filtros y gráfico a pantalla completa">⛶</button>
           <button id="panel-drag" class="panel-drag" type="button" title="Arrastrar para mover el panel" aria-label="Mover panel de filtros">⠿</button>
         </div>
       </div>
@@ -116,6 +117,14 @@
             <input type="range" id="filter-capacity-max" class="filter-range" aria-label="Capacidad máxima" />
           </div>
           <span class="filter-hint">Aforo máximo registrado por estadio. Ajusta ambos extremos para comparar un intervalo.</span>
+        </div>
+        <div class="filter-row filter-row--range v4-only">
+          <label>Capacidad (personas)</label>
+          <div class="capacity-number-controls">
+            <label for="filter-capacity-min-number">Desde</label><input id="filter-capacity-min-number" type="number" inputmode="numeric" />
+            <label for="filter-capacity-max-number">Hasta</label><input id="filter-capacity-max-number" type="number" inputmode="numeric" />
+          </div>
+          <span class="filter-hint">Escribe el intervalo de aforo máximo que quieres comparar.</span>
         </div>
         <div class="filter-foot">
           <span id="filter-summary" class="filter-summary"></span>
