@@ -1025,9 +1025,9 @@ function drawBar() {
   const shownMin = values.length ? Math.min(...values) : 0;
   const shownMax = values.length ? Math.max(...values) : 0;
   const shownSpread = shownMax - shownMin;
-  const v3AxisPadding = shownSpread > 0 ? shownSpread * 0.12 : shownMax * 0.04;
-  const v3AxisRange = values.length
-    ? [Math.max(0, shownMin - v3AxisPadding), shownMax + v3AxisPadding]
+  const capacityAxisPadding = shownSpread > 0 ? shownSpread * 0.12 : shownMax * 0.04;
+  const capacityAxisRange = values.length
+    ? [Math.max(0, shownMin - capacityAxisPadding), shownMax + capacityAxisPadding]
     : undefined;
   const labels = sorted.map((s, index) => activeVersion === "v4" ? `<b>${index + 1}.</b> ${s.name}` : s.name);
   const barElement = document.getElementById("bar");
@@ -1048,9 +1048,7 @@ function drawBar() {
     cliponaxis: !overview,
     customdata: sorted,
     marker: {
-      color: activeVersion === "v4"
-        ? sorted.map((_, index) => index === 0 ? "#e58b00" : "#3976b8")
-        : values,
+      color: values,
       colorscale: isV3Plus()
         ? [[0, "#2b6cb0"], [0.5, "#f2a900"], [1, "#e53e3e"]]
         : overview
@@ -1074,8 +1072,8 @@ function drawBar() {
       gridcolor: p.grid, zerolinecolor: p.grid,
       tickfont: { size: overview ? 12 : 10, color: p.muted },
       tickformat: overview ? ",.0f" : undefined,
-      range: activeVersion === "v3"
-        ? v3AxisRange
+      range: isV3Plus()
+        ? capacityAxisRange
         : overview && values.length ? [0, shownMax * 1.16] : undefined,
       showline: false,
       fixedrange: overview
