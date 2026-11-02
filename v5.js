@@ -33,17 +33,27 @@
     setTimeout(() => view.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   });
 
-  $('v5-connect').addEventListener('click', () => {
-    const connectButton = document.getElementById('ProtobjectPlusButton');
-    if (!connectButton) {
-      $('v5-phone-status').textContent = 'Protobject no está listo. Recarga la página e inténtalo otra vez.';
-      return;
-    }
-    // El click del usuario debe activar primero el botón real de Protobject.
-    connectButton.click();
-    $('v5-phone-status').textContent = 'Escanea el QR de Protobject con el teléfono.';
-    initAudio().then(() => { audioPrimed = true; }).catch(() => {});
-  });
+  function mountProtobjectConnectButton() {
+    const frameworkButton = document.getElementById('ProtobjectPlusButton');
+    const placeholder = $('v5-connect');
+    if (!frameworkButton || !placeholder || frameworkButton === placeholder) return false;
+    frameworkButton.textContent = '＋ Conectar teléfono';
+    frameworkButton.title = 'Conectar teléfono con Protobject';
+    frameworkButton.setAttribute('aria-label', 'Conectar teléfono con Protobject');
+    frameworkButton.addEventListener('click', () => {
+      $('v5-phone-status').textContent = 'Escanea el QR de Protobject con el teléfono.';
+      initAudio().then(() => { audioPrimed = true; }).catch(() => {});
+    });
+    placeholder.replaceWith(frameworkButton);
+    return true;
+  }
+  window.mountProtobjectConnectButton = mountProtobjectConnectButton;
+  if (!mountProtobjectConnectButton()) {
+    const observer = new MutationObserver(() => {
+      if (mountProtobjectConnectButton()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 
   function render(value) {
     const pct = Math.max(0, Math.min(100, Number(value) || 0));
@@ -65,5 +75,11 @@
     $('v5-phone-status').textContent = '● Teléfono conectado · señal en vivo';
     render(value);
   };
+  window.handleV5Connection = page => {
+    if (page && page !== 'index.html') {
+      $('v5-phone-status').textContent = '● Teléfono conectado · calibra el sensor';
+    }
+  };
   (window.v5PendingMessages || []).splice(0).forEach(window.handleV5ProtobjectMessage);
+  (window.v5PendingConnections || []).splice(0).forEach(window.handleV5Connection);
 })();

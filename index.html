@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>
+    // Protobject enruta mensajes al nombre declarado en config.js (`index.html`).
+    // Normaliza la URL de GitHub Pages y del servidor local para que el nombre
+    // de página coincida, preservando el ID de emparejamiento `ptjuid`.
+    if (location.pathname.endsWith("/")) {
+      location.replace(location.pathname + "index.html" + location.search + location.hash);
+    }
+  </script>
   <title>Estadios con mayor capacidad del mundo</title>
   <link rel="stylesheet" href="styles.css?v=8" />
   <!-- Plotly.js -->
@@ -188,15 +196,21 @@
     // Protobject requiere instalar el receptor antes de inicializar/conectar
     // dispositivos. Conserva lecturas tempranas hasta que cargue v5.js.
     window.v5PendingMessages = [];
+    window.v5PendingConnections = [];
     Protobject.Core.onReceived(message => {
       if (window.handleV5ProtobjectMessage) window.handleV5ProtobjectMessage(message);
       else window.v5PendingMessages.push(message);
     });
+    window.routeV5Connection = page => {
+      if (window.handleV5Connection) window.handleV5Connection(page);
+      else window.v5PendingConnections.push(page);
+    };
+    Protobject.Core.onConnected(window.routeV5Connection);
   </script>
   <script src="data.js"></script>
   <script src="app.js?v=12"></script>
   <script src="arduino.js"></script>
   <script src="v5.js?v=6"></script>
-  <script src="config.js?v=3"></script>
+  <script src="config.js?v=5"></script>
 </body>
 </html>

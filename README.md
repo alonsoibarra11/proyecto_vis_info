@@ -19,7 +19,7 @@ Además, la página puede **fisicalizar** el gol: al conectar un **Arduino con
 un servo** por USB, la plataforma de una maqueta tiembla con una intensidad
 proporcional al estadio (ver sección *Integración con Arduino*).
 
-Observa la página en el siguiente link: https://alonsoibarra11.github.io/proyecto_vis_info/
+Observa la página en el siguiente link: https://alonsoibarra11.github.io/proyecto_vis_info/index.html
 
 
 ## Tecnologías
@@ -50,7 +50,7 @@ los CDN no cargan bien con `file://`):
 
 ```bash
 node server.js
-# abre http://localhost:8000
+# abre http://localhost:8000/index.html
 ```
 
 Para V5 en producción, abre el sitio HTTPS de GitHub Pages. Protobject muestra el QR, abre `sensor.html` en Android y enruta el valor calibrado de vuelta al computador; no hace falta levantar un backend propio. Ambos dispositivos deben estar conectados a Internet y, siguiendo el montaje del kit, compartir la Wi-Fi. En el teléfono calibra el reposo sin apretar y luego el máximo mientras presionas el globo. Al llegar a 100 %, se completa la capacidad visual y suena `crowd-cheer.mp3`.

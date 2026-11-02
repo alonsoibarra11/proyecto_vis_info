@@ -10,7 +10,11 @@
   let intensidadAnterior = null;
 
   function send(value) {
-    if (window.Protobject?.Core) Protobject.Core.send(value).to('index.html');
+    // Protobject expone un identificador global; no necesariamente cuelga de
+    // window como propiedad, por eso se consulta el nombre global directamente.
+    if (typeof Protobject !== 'undefined' && Protobject.Core) {
+      Protobject.Core.send(value).to('index.html');
+    }
   }
 
   function actualizar(event) {
