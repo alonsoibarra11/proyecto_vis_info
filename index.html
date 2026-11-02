@@ -184,10 +184,19 @@
   </div>
 
   <script src="https://app.protobject.com/framework/p.js"></script>
+  <script>
+    // Protobject requiere instalar el receptor antes de inicializar/conectar
+    // dispositivos. Conserva lecturas tempranas hasta que cargue v5.js.
+    window.v5PendingMessages = [];
+    Protobject.Core.onReceived(message => {
+      if (window.handleV5ProtobjectMessage) window.handleV5ProtobjectMessage(message);
+      else window.v5PendingMessages.push(message);
+    });
+  </script>
   <script src="data.js"></script>
   <script src="app.js?v=12"></script>
   <script src="arduino.js"></script>
-  <script src="v5.js?v=5"></script>
-  <script src="config.js?v=2"></script>
+  <script src="v5.js?v=6"></script>
+  <script src="config.js?v=3"></script>
 </body>
 </html>

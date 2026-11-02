@@ -65,4 +65,5 @@
     $('v5-phone-status').textContent = '● Teléfono conectado · señal en vivo';
     render(value);
   };
+  (window.v5PendingMessages || []).splice(0).forEach(window.handleV5ProtobjectMessage);
 })();
