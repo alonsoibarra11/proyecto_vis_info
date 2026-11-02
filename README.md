@@ -38,6 +38,9 @@ Observa la página en el siguiente link: https://alonsoibarra11.github.io/proyec
 - `server.js` — servidor estático mínimo para previsualizar.
 - `scripts/fetch_stadiums.mjs` — script que baja los datos de Wikidata y regenera `data.js`.
 - `docs/V1_R1.md`, `docs/V2_R2.md` y `docs/V3_R3.md` — registro del proceso de diseño y las revisiones.
+- `docs/Entrega2/` — registro independiente de V1, R1, V2, R2, V3 y R3 de la segunda entrega.
+- `sensor.html`, `sensor.js`, `v5.js` — sensor Android por orientación, conexión QR y experiencia de ocupación de estadio V5.
+- `config.js` — roles Protobject de la página principal y el sensor; activa el emparejamiento QR en producción.
 - `assets/estadio.png` — imagen (sin fondo) usada como marcador de cada estadio en el mapa.
 - `assets/crowd-cheer.mp3` — grito de multitud que suena al hacer click.
 
@@ -49,6 +52,8 @@ los CDN no cargan bien con `file://`):
 node server.js
 # abre http://localhost:8000
 ```
+
+Para V5 en producción, abre el sitio HTTPS de GitHub Pages. Protobject muestra el QR, abre `sensor.html` en Android y enruta el valor calibrado de vuelta al computador; no hace falta levantar un backend propio. Ambos dispositivos deben estar conectados a Internet y, siguiendo el montaje del kit, compartir la Wi-Fi. En el teléfono calibra el reposo sin apretar y luego el máximo mientras presionas el globo. Al llegar a 100 %, se completa la capacidad visual y suena `crowd-cheer.mp3`.
 
 El servidor lee `PORT`, `HOST` y `STATIC_ROOT` desde `.env` (ver más abajo). Si
 el puerto ya está en uso, arranca en otro:

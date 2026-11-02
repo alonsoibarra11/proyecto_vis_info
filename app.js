@@ -201,6 +201,12 @@ function stopAllSound(fast = true) {
 }
 
 async function playGoal(stadium, zoom = false) {
+  // En V5, elegir un estadio desde el mapa o el ranking lo carga en el sensor
+  // físico y baja a esa visualización, sin ejecutar la animación antigua.
+  if (activeVersion === "v5") {
+    window.dispatchEvent(new CustomEvent("v5:stadium-selected", { detail: stadium }));
+    return;
+  }
   const sequence = ++goalSequence;
   cancelMatchIntro();
   cancelPeopleAnimation();
@@ -627,7 +633,7 @@ function setVersion(version) {
         : "Compara cuántas personas caben en cada estadio y descubre dónde están.";
   }
   const stage = document.getElementById("stage");
-  const shouldShowMap = version === "v1";
+  const shouldShowMap = version === "v1" || version === "v5";
   if (stage) stage.classList.toggle("map-hidden", !shouldShowMap);
   mapVisible = shouldShowMap;
   if (shouldShowMap) {
