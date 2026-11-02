@@ -33,15 +33,16 @@
     setTimeout(() => view.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   });
 
-  $('v5-connect').addEventListener('click', async () => {
-    try { await initAudio(); audioPrimed = true; } catch (_) {}
+  $('v5-connect').addEventListener('click', () => {
     const connectButton = document.getElementById('ProtobjectPlusButton');
     if (!connectButton) {
       $('v5-phone-status').textContent = 'Protobject no está listo. Recarga la página e inténtalo otra vez.';
       return;
     }
+    // El click del usuario debe activar primero el botón real de Protobject.
     connectButton.click();
     $('v5-phone-status').textContent = 'Escanea el QR de Protobject con el teléfono.';
+    initAudio().then(() => { audioPrimed = true; }).catch(() => {});
   });
 
   function render(value) {
@@ -58,12 +59,10 @@
 
   $('v5-reset').addEventListener('click', () => render(0));
 
-  if (window.Protobject?.Core) {
-    Protobject.Core.onReceived(message => {
-      const value = typeof message === 'number' ? message : Number(message?.intensidad ?? message?.value);
-      if (!Number.isFinite(value)) return;
-      $('v5-phone-status').textContent = '● Teléfono conectado · señal en vivo';
-      render(value);
-    });
-  }
+  window.handleV5ProtobjectMessage = message => {
+    const value = typeof message === 'number' ? message : Number(message?.intensidad ?? message?.value);
+    if (!Number.isFinite(value)) return;
+    $('v5-phone-status').textContent = '● Teléfono conectado · señal en vivo';
+    render(value);
+  };
 })();
