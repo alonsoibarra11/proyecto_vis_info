@@ -53,10 +53,12 @@ const COUNTRIES = [...new Set(STADIUMS.map(s => s.country).filter(Boolean))]
 
 function visibleStadiums() {
   return STADIUMS.filter(s => {
-    if (isV3Plus() && (s.capacity < filters.minCapacity || s.capacity > filters.maxCapacity)) return false;
-    if (!isV3Plus() && filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
+    const useRange = isV3Plus() || activeVersion === "v5";
+    if (useRange && (s.capacity < filters.minCapacity || s.capacity > filters.maxCapacity)) return false;
+     
+   if (!useRange && filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
     if (filters.country !== "Todos" && s.country !== filters.country) return false;
-    if (!isV3Plus() && s.capacity < filters.minCapacity) return false;
+    if (!useRange && s.capacity < filters.minCapacity) return false;
     return true;
   });
 }
@@ -1366,7 +1368,7 @@ function buildFilter() {
     resetBtn.addEventListener("click", () => {
       filters.confederation = "Todas";
       filters.country = "Todos";
-      filters.minCapacity = isV3Plus() ? rangeMin : CAP_MIN;
+      filters.minCapacity = (isV3Plus() || activeVersion === "v5") ? rangeMin : CAP_MIN;
       filters.maxCapacity = rangeMax;
       if (confSel) confSel.value = "Todas";
       if (countrySel) countrySel.value = "Todos";
