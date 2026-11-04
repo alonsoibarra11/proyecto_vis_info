@@ -854,6 +854,8 @@ html[data-version="v4"] .guided-tour-reopen.v3-only { display: block !important;
 html[data-version="v4"] .guided-tour.v3-only:not([hidden]) { display: grid !important; }
 html[data-version="v4"] .capacity-legend.v3-only { display: flex !important; }
 .v4-only { display: none !important; }
+html[data-version="v5"] .v2-only { display: none !important; }
+html[data-version="v5"] .filter-row.v3-only { display: flex !important; }
 .capacity-number-controls { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px 10px; }
 .capacity-number-controls input { min-width: 0; width: 100%; padding: 8px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); }
 .capacity-legend {
