@@ -26,6 +26,8 @@ window.StadiumBus = StadiumBus;
 const capacities = STADIUMS.map(s => s.capacity);
 const CAP_MIN = Math.min(...capacities), CAP_MAX = Math.max(...capacities);
 const isV3Plus = () => activeVersion === "v3" || activeVersion === "v4";
+// V5 y V6 comparten el sensor físico; V6 solo cambia la visualización.
+const isSensorVersion = (v = activeVersion) => v === "v5" || v === "v6";
 
 // Devuelve 0..1 según la capacidad del estadio (más aforo = más intenso).
 function intensityOf(st) {
@@ -53,7 +55,7 @@ const COUNTRIES = [...new Set(STADIUMS.map(s => s.country).filter(Boolean))]
 
 function visibleStadiums() {
   return STADIUMS.filter(s => {
-    const useRange = isV3Plus() || activeVersion === "v5";
+    const useRange = isV3Plus() || isSensorVersion();
     if (useRange && (s.capacity < filters.minCapacity || s.capacity > filters.maxCapacity)) return false;
      
    if (!useRange && filters.confederation !== "Todas" && s.confederation !== filters.confederation) return false;
@@ -205,7 +207,7 @@ function stopAllSound(fast = true) {
 async function playGoal(stadium, zoom = false) {
   // En V5, elegir un estadio desde el mapa o el ranking lo carga en el sensor
   // físico y baja a esa visualización, sin ejecutar la animación antigua.
-  if (activeVersion === "v5") {
+  if (isSensorVersion()) {
     window.dispatchEvent(new CustomEvent("v5:stadium-selected", { detail: stadium }));
     return;
   }
@@ -635,7 +637,7 @@ function setVersion(version) {
         : "Compara cuántas personas caben en cada estadio y descubre dónde están.";
   }
   const stage = document.getElementById("stage");
-  const shouldShowMap = version === "v1" || version === "v5";
+  const shouldShowMap = version === "v1" || isSensorVersion(version);
   if (stage) stage.classList.toggle("map-hidden", !shouldShowMap);
   mapVisible = shouldShowMap;
   if (shouldShowMap) {
@@ -1368,7 +1370,7 @@ function buildFilter() {
     resetBtn.addEventListener("click", () => {
       filters.confederation = "Todas";
       filters.country = "Todos";
-      filters.minCapacity = (isV3Plus() || activeVersion === "v5") ? rangeMin : CAP_MIN;
+      filters.minCapacity = (isV3Plus() || isSensorVersion()) ? rangeMin : CAP_MIN;
       filters.maxCapacity = rangeMax;
       if (confSel) confSel.value = "Todas";
       if (countrySel) countrySel.value = "Todos";

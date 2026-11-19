@@ -12,7 +12,7 @@
     }
   </script>
   <title>Estadios con mayor capacidad del mundo</title>
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
   <!-- Plotly.js -->
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
   <!-- Tone.js -->
@@ -27,6 +27,7 @@
       <button type="button" class="version-tab" data-version="v3" aria-pressed="false">V3</button>
       <button type="button" class="version-tab" data-version="v4" aria-pressed="false">V4</button>
       <button type="button" class="version-tab" data-version="v5" aria-pressed="false" title="Sensor de peso y ocupación">V5</button>
+      <button type="button" class="version-tab" data-version="v6" aria-pressed="false" title="Sensor de peso · estadio animado">V6</button>
     </div>
   </nav>
   <!-- ===== Portada de bienvenida (scroll hacia el mapa) ===== -->
@@ -175,7 +176,7 @@
   <main id="v5-view" class="v5-view" hidden>
     <header class="v5-header"><div><p>FISICALIZACIÓN · SENSOR DE ORIENTACIÓN</p><h1>Llena <span class="v5-title-accent">el estadio</span> con tu fuerza</h1><p class="v5-header-sub">Conecta un Android por QR, calibra el montaje y presiona el estadio. Los estadios más grandes necesitan más fuerza para llenarse.</p></div><button id="v5-connect" type="button">＋ Conectar teléfono</button></header>
     <section class="v5-controls"><label for="v5-stadium">Estadio</label><select id="v5-stadium"></select><span id="v5-phone-status">Teléfono desconectado</span><button id="v5-reset" type="button">Reiniciar llenado</button></section>
-    <section class="v5-arena" aria-live="polite"><h2 id="v5-name"></h2><p id="v5-location"></p><div class="v5-seats" id="v5-seats" aria-label="Ocupación del estadio"></div><strong id="v5-percent">0%</strong><p id="v5-capacity"></p><div class="v5-fill-track" title="Ocupación del estadio"><span id="v5-fill"></span></div><div class="v5-press"><span class="v5-press-label">Presión aplicada <b id="v5-press-value">0%</b></span><div class="v5-press-track"><span id="v5-press-fill"></span><i id="v5-press-target" title="Presión necesaria para llenar este estadio"></i></div><p id="v5-goal"></p></div><h2 id="v5-full" hidden>¡El estadio está lleno!</h2></section>
+    <section class="v5-arena" aria-live="polite"><h2 id="v5-name"></h2><p id="v5-location"></p><div class="v5-seats" id="v5-seats" aria-label="Ocupación del estadio"></div><div class="v6-stage" id="v6-stage"><canvas id="v6-canvas" aria-label="Estadio animado: ocupación"></canvas><div class="v6-banner" id="v6-banner" hidden><span>¡ESTADIO</span><strong>LLENO!</strong></div></div><strong id="v5-percent">0%</strong><p id="v5-capacity"></p><div class="v5-fill-track" title="Ocupación del estadio"><span id="v5-fill"></span></div><div class="v5-press"><span class="v5-press-label">Presión aplicada <b id="v5-press-value">0%</b></span><div class="v5-press-track"><span id="v5-press-fill"></span><i id="v5-press-target" title="Presión necesaria para llenar este estadio"></i></div><p id="v5-goal"></p></div><h2 id="v5-full" hidden>¡El estadio está lleno!</h2></section>
   </main>
 
   <div class="guided-tour v3-only" id="guided-tour" role="dialog" aria-modal="true" aria-labelledby="guided-tour-title" hidden>
@@ -210,7 +211,8 @@
   <script src="data.js"></script>
   <script src="app.js?v=12"></script>
   <script src="arduino.js"></script>
-  <script src="v5.js?v=7"></script>
+  <script src="v5.js?v=8"></script>
+  <script src="v6.js?v=1"></script>
   <script src="config.js?v=5"></script>
 </body>
 </html>

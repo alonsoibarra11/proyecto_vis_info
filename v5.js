@@ -46,8 +46,10 @@
   selector.addEventListener('change', () => selectStadium());
 
   document.querySelectorAll('.version-tab').forEach(button => button.addEventListener('click', () => {
-    const on = button.dataset.version === 'v5';
+    const on = button.dataset.version === 'v5' || button.dataset.version === 'v6';
     view.hidden = !on;
+    // V6 reutiliza esta misma vista y lógica; solo cambia la visualización.
+    view.classList.toggle('is-v6', button.dataset.version === 'v6');
     if (on) setTimeout(() => view.scrollIntoView({ behavior: 'smooth', block: 'start' }), 180);
   }));
 
@@ -94,6 +96,7 @@
     if (full && !wasFull && audioPrimed) playCrowdCheer(stadium, 1);
     if (!full && wasFull && audioReady) stopAllSound(true);
     wasFull = full;
+    window.V6Stadium?.update(pct, stadium);
   }
 
   $('v5-reset').addEventListener('click', () => render(0));

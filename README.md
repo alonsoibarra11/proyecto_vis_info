@@ -40,6 +40,7 @@ Observa la página en el siguiente link: https://alonsoibarra11.github.io/proyec
 - `docs/V1_R1.md`, `docs/V2_R2.md` y `docs/V3_R3.md` — registro del proceso de diseño y las revisiones.
 - `docs/Entrega2/` — registro independiente de V1, R1, V2, R2, V3 y R3 de la segunda entrega.
 - `sensor.html`, `sensor.js`, `v5.js` — sensor Android por orientación, conexión QR y experiencia de ocupación de estadio V5.
+- `v6.js` — V6: la misma experiencia y lógica que V5 (mismo sensor y calibración), con un estadio animado en canvas: cancha pintada, hinchas que llenan las tribunas fila por fila y, al llenarse, ola, confeti, flashes, focos y cartel de "¡Estadio lleno!".
 - `config.js` — roles Protobject de la página principal y el sensor; activa el emparejamiento QR en producción.
 - `assets/estadio.png` — imagen (sin fondo) usada como marcador de cada estadio en el mapa.
 - `assets/crowd-cheer.mp3` — grito de multitud que suena al hacer click.
