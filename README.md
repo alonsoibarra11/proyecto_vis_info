@@ -53,7 +53,9 @@ node server.js
 # abre http://localhost:8000/index.html
 ```
 
-Para V5 en producción, abre el sitio HTTPS de GitHub Pages. Protobject muestra el QR, abre `sensor.html` en Android y enruta el valor calibrado de vuelta al computador; no hace falta levantar un backend propio. Ambos dispositivos deben estar conectados a Internet y, siguiendo el montaje del kit, compartir la Wi-Fi. En el teléfono calibra el reposo sin apretar y luego el máximo mientras presionas el globo. Al llegar a 100 %, se completa la capacidad visual y suena `crowd-cheer.mp3`.
+Para V5 en producción, abre el sitio HTTPS de GitHub Pages. Protobject muestra el QR, abre `sensor.html` en Android y enruta el valor calibrado de vuelta al computador; no hace falta levantar un backend propio. Ambos dispositivos deben estar conectados a Internet y, siguiendo el montaje del kit, compartir la Wi-Fi. En el teléfono calibra el reposo sin apretar (0 personas) y luego el **tope físico** del montaje, que equivale al estadio más grande del dataset (132.000 personas).
+
+La presión necesaria para llenar un estadio es **proporcional a su capacidad**: la misma fuerza representa siempre la misma cantidad de personas. Por ejemplo, un estadio de ~44.000 personas se llena con ~34 % del recorrido, mientras que el de 132.000 necesita el 100 %. El teléfono envía la presión cruda (0–100 % del recorrido) y `v5.js` la convierte en ocupación según el estadio elegido; además, el computador envía el estadio al teléfono para que la pantalla de calibración muestre la meta (porcentaje del recorrido y grados de inclinación aproximados) y una marca en el medidor. Al llegar a 100 % de ocupación, se completa la capacidad visual y suena `crowd-cheer.mp3`.
 
 El servidor lee `PORT`, `HOST` y `STATIC_ROOT` desde `.env` (ver más abajo). Si
 el puerto ya está en uso, arranca en otro:

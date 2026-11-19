@@ -97,6 +97,14 @@ body {
 .v5-fill-track span { display:block; width:0; height:100%; background:linear-gradient(90deg,#81c784,#ffc342,#ee5849); transition:width .12s linear; }
 #v5-full { margin:15px 0 0; color:#ffd06b; animation:fullPulse .8s infinite alternate; }
 @keyframes fullPulse { to { transform:scale(1.04); text-shadow:0 0 25px #ffbf4d; } }
+.v5-press { max-width:690px; margin:18px auto 0; text-align:left; }
+.v5-press-label { display:block; margin-bottom:6px; color:#d9dfdb; font-size:14px; }
+.v5-press-label b { color:#fff; }
+.v5-press-track { position:relative; height:12px; border-radius:20px; background:#ffffff24; }
+.v5-press-track span { display:block; width:0; height:100%; border-radius:20px; background:#8fb7d8; transition:width .12s linear; }
+.v5-press-track i { position:absolute; top:-6px; bottom:-6px; left:100%; width:3px; margin-left:-1px; border-radius:2px; background:#fff; box-shadow:0 0 6px #fff9; transition:left .3s; }
+#v5-goal { margin:12px 0 0; color:#c1cbc5; font-size:15px; line-height:1.5; }
+#v5-goal b { color:#f3bd59; font-size:18px; }
 .sensor-page button { padding:12px; border:0; border-radius:8px; background:var(--accent-2); color:#fff; font:inherit; font-weight:700; cursor:pointer; }
 .sensor-page button:disabled { opacity:.45; cursor:not-allowed; }
 .sensor-actions { display:grid; gap:9px; margin:20px auto 0; }
@@ -108,6 +116,15 @@ html[data-version="v5"] .dropdown-menu, html[data-version="v5"] .qr-code-contain
 .sensor-page main { width:min(420px,100%); }.sensor-page h1 { font-size:30px; }.sensor-page p { color:#c7d2ca; line-height:1.5; }
 .sensor-meter { width:84px; height:min(43vh,330px); margin:22px auto 14px; display:flex; align-items:end; overflow:hidden; border:5px solid #78857c; border-radius:50px; background:#fff; box-shadow:0 10px 35px #0005; }
 .sensor-meter span { width:100%; height:0; background:linear-gradient(0deg,#71bd76,#f5d34e,#ed6253); transition:height .12s; }
+.sensor-meter { position:relative; }
+.sensor-meter i { position:absolute; left:0; right:0; bottom:100%; height:4px; margin-bottom:-2px; background:#102a22; box-shadow:0 0 0 2px #fff; transition:bottom .3s; }
+.sensor-target-card { display:grid; gap:4px; margin:14px 0 0; padding:12px 14px; border:1px solid #f3bd5980; border-radius:12px; background:#ffffff10; }
+.sensor-target-label { color:#e9ad42; font-size:11px; font-weight:800; letter-spacing:.15em; }
+.sensor-target-card strong { font-size:19px; }
+.sensor-target-card #target-capacity { color:#c7d2ca; font-size:14px; }
+.sensor-target-card p { margin:4px 0 0; }
+.sensor-target-card b { color:#f3bd59; font-size:20px; }
+#sensor-pressure { margin:0; font-size:14px; }
 #sensor-value { display:block; font-size:68px; }
 @media(max-width:600px) { .v5-header { align-items:flex-start; flex-direction:column; }.v5-controls { align-items:stretch; flex-direction:column; } #v5-phone-status { margin:0; }.v5-arena { min-height:400px; padding:25px 10px; }.v5-seats { height:190px; gap:4px; padding:9px; border-width:9px; }.v5-seats i { width:7px; height:7px; } }
 
